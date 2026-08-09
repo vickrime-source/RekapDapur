@@ -72,22 +72,7 @@ export function generateInvoiceNumber(suffix?: string): string {
 }
 
 export function getTokoBadgeStyle(tokoName: string): string {
-  if (!tokoName) return 'bg-slate-100 text-slate-800 border-slate-200';
-  const nameUpper = tokoName.toUpperCase().trim();
-  
-  if (nameUpper.includes('HTG')) {
-    return 'bg-emerald-100 text-emerald-950 border-emerald-300 shadow-2xs font-extrabold';
-  }
-  if (nameUpper.includes('ADIFRUITA') || nameUpper.includes('ADI')) {
-    return 'bg-orange-100 text-orange-950 border-orange-300 shadow-2xs font-extrabold';
-  }
-  if (nameUpper.includes('PROHE')) {
-    return 'bg-amber-100 text-amber-950 border-amber-300 shadow-2xs font-extrabold';
-  }
-  if (nameUpper.includes('LUWENG')) {
-    return 'bg-pink-100 text-pink-950 border-pink-300 shadow-2xs font-extrabold';
-  }
-  
-  return 'bg-sky-100 text-sky-950 border-sky-300 shadow-2xs font-extrabold';
+  if (!tokoName) return 'bg-slate-100 text-slate-800 border-slate-300 font-bold';
+  return 'bg-slate-100 text-slate-900 border-slate-300 font-extrabold shadow-2xs';
 }
 

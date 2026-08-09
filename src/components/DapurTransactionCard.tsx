@@ -66,9 +66,9 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
             {formatTanggalDisatuin(date)}
           </span>
 
-          {/* Toko Title Pill (Highlighted in Yellow per Lampiran 1: NAMA TOKO CONTOH : HTG) */}
-          <div className="flex items-center gap-1 bg-amber-300 border border-amber-400 text-slate-900 px-2.5 py-1 rounded-xl font-black text-xs sm:text-sm shadow-2xs uppercase">
-            <span>NAMA TOKO CONTOH : {storeName}</span>
+          {/* Toko Title Pill (Monochrome) */}
+          <div className="flex items-center gap-1 bg-slate-100 border border-slate-300 text-slate-900 px-2.5 py-1 rounded-xl font-black text-xs sm:text-sm shadow-2xs uppercase">
+            <span>TOKO : {storeName}</span>
           </div>
 
           {/* Status Badge Pill */}
@@ -127,7 +127,7 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
           <thead>
             <tr className="border-b border-indigo-100 text-[10px] font-black text-slate-600 uppercase tracking-wider">
               <th className="py-2 px-1 w-[28%]">BARANG</th>
-              <th className="py-2 px-1 text-center w-[20%] bg-amber-200/80 text-slate-900 rounded-t">DAPUR</th>
+              <th className="py-2 px-1 text-center w-[20%] bg-slate-100 text-slate-900 rounded-t">DAPUR</th>
               <th className="py-2 px-1 text-center w-[10%]">QTY</th>
               <th className="py-2 px-1 text-right w-[20%]">H.JUAL</th>
               <th className="py-2 px-1 text-right w-[14%]">H.BELI</th>
@@ -162,9 +162,9 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
                     )}
                   </td>
 
-                  {/* DAPUR Column - Yellow Highlight Badge */}
+                  {/* DAPUR Column */}
                   <td className="py-2 px-1 text-center">
-                    <span className="bg-amber-300 text-slate-900 font-black px-2.5 py-1 rounded-xl text-[11px] uppercase tracking-wider shadow-2xs border border-amber-400 inline-block">
+                    <span className="bg-slate-100 text-slate-900 font-extrabold px-2.5 py-1 rounded-xl text-[11px] uppercase tracking-wider shadow-2xs border border-slate-300 inline-block">
                       {item.tujuanDapur}
                     </span>
                   </td>
@@ -215,9 +215,12 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
                       </button>
                       {/* IKON CETAK (Highlighted in Yellow per Lampiran 1) */}
                       <button
-                        onClick={() => onOpenInvoiceModal([item], item.tujuanDapur, storeName)}
+                        onClick={() => {
+                          const kitchenItems = items.filter((it) => it.tujuanDapur === item.tujuanDapur);
+                          onOpenInvoiceModal(kitchenItems, item.tujuanDapur, storeName);
+                        }}
                         className="p-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold shadow-2xs transition-all active:scale-95 border border-amber-500/80"
-                        title="IKON CETAK: Print / Invoice Barang Ini"
+                        title="IKON CETAK: Print / Invoice Pesanan Dapur Ini"
                       >
                         <Printer className="w-3.5 h-3.5 stroke-[2.5]" />
                       </button>

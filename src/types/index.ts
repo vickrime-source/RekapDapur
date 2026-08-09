@@ -1,5 +1,5 @@
 export type OrderStatus = "pending" | "selesai";
-export type PaymentStatus = "PAID" | "UNPAID" | "PENDING";
+export type PaymentStatus = "PAID" | "UNPAID";
 export type DeliveryStatus = "DONE" | "PENDING";
 
 export interface OrderItem {

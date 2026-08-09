@@ -5,7 +5,9 @@ import {
   Kitchen, 
   Store as StoreType, 
   InvoiceRecord, 
-  TextParseResult 
+  TextParseResult,
+  PaymentStatus,
+  DeliveryStatus
 } from './types';
 import { 
   INITIAL_KITCHENS, 
@@ -126,7 +128,7 @@ export default function App() {
     );
   };
 
-  const handleUpdatePaymentStatus = (id: string, paymentStatus: 'PAID' | 'UNPAID' | 'PENDING') => {
+  const handleUpdatePaymentStatus = (id: string, paymentStatus: PaymentStatus) => {
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id !== id) return o;
@@ -239,11 +241,29 @@ export default function App() {
       alert('Tidak ada item untuk dibuatkan invoice');
       return;
     }
-    const invNum = generateInvoiceNumber(kitchenName);
-    setInvoiceItems(items);
+
+    const mainKitchen = kitchenName || items[0]?.tujuanDapur;
+    const mainStore = storeName || items[0]?.toko;
+    const mainDate = items[0]?.tanggal;
+
+    const normStore = (mainStore || '').trim().toLowerCase();
+    const normKitchen = (mainKitchen || '').trim().toLowerCase();
+
+    // Strict filter for store + kitchen + date
+    const scopedItems = items.filter((item) => {
+      const matchStore = !normStore || item.toko.trim().toLowerCase() === normStore;
+      const matchKitchen = !normKitchen || item.tujuanDapur.trim().toLowerCase() === normKitchen;
+      const matchDate = !mainDate || item.tanggal === mainDate;
+      return matchStore && matchKitchen && matchDate;
+    });
+
+    const finalItems = scopedItems.length > 0 ? scopedItems : items;
+    const invNum = generateInvoiceNumber(mainKitchen);
+
+    setInvoiceItems(finalItems);
     setInvoiceNumber(invNum);
-    setInvoiceTargetKitchen(kitchenName || items[0]?.tujuanDapur);
-    setInvoiceTargetStore(storeName || items[0]?.toko);
+    setInvoiceTargetKitchen(mainKitchen);
+    setInvoiceTargetStore(mainStore);
     setIsInvoiceModalOpen(true);
   };
 

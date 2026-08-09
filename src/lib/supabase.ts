@@ -160,3 +160,56 @@ export async function pushOrdersToSupabase(orders: OrderItem[]): Promise<{ succe
     return { success: false, message: err.message || 'Error uploading to Supabase' };
   }
 }
+
+export const SUPABASE_STORAGE_RLS_SQL = `-- SQL RLS Policy Supabase Storage Bucket 'content' untuk mengizinkan upload & download file DOCX/PDF/Images:
+
+-- 1. Pastikan bucket 'content' dibuat & Public
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('content', 'content', true) 
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Beri akses penuh (SELECT, INSERT, UPDATE, DELETE) untuk publik/anonim di bucket 'content'
+DROP POLICY IF EXISTS "Allow public access on content bucket" ON storage.objects;
+
+CREATE POLICY "Allow public access on content bucket" 
+ON storage.objects FOR ALL 
+TO public 
+USING (bucket_id = 'content') 
+WITH CHECK (bucket_id = 'content');
+`;
+
+/**
+ * Upload DOCX / PDF template file to Supabase Storage Bucket 'content'
+ * Target bucket path: Files > Buckets > content
+ */
+export async function uploadTemplateToSupabaseBucket(file: File, customFileName?: string): Promise<{ success: boolean; publicUrl?: string; message: string }> {
+  try {
+    const fileName = customFileName || `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+    const filePath = `templates/${fileName}`;
+
+    // Upload file to bucket 'content'
+    const { data, error } = await supabase.storage.from('content').upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true,
+    });
+
+    if (error) {
+      return {
+        success: false,
+        message: `Gagal upload ke bucket 'content': ${error.message}. Penyebab: Kebijakan RLS Supabase saat ini dikunci hanya untuk gambar/JPG. Jalankan SQL Policy perbaikan di bawah.`,
+      };
+    }
+
+    const { data: urlData } = supabase.storage.from('content').getPublicUrl(filePath);
+    return {
+      success: true,
+      publicUrl: urlData.publicUrl,
+      message: `Berhasil meng-upload template '${file.name}' ke Supabase Storage Bucket 'content'!`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Terjadi kesalahan saat upload ke Supabase Storage',
+    };
+  }
+}

@@ -42,7 +42,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [toko, setToko] = useState('');
   const [tujuanDapur, setTujuanDapur] = useState('');
   const [pemasok, setPemasok] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UNPAID' | 'PENDING'>('UNPAID');
+  const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UNPAID'>('UNPAID');
   const [deliveryStatus, setDeliveryStatus] = useState<'DONE' | 'PENDING'>('PENDING');
   const [tanggal, setTanggal] = useState(selectedDate);
   const [catatan, setCatatan] = useState('');
@@ -452,13 +452,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   className={`w-full px-3 py-2.5 clay-input text-xs font-black cursor-pointer ${
                     paymentStatus === 'PAID'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : paymentStatus === 'UNPAID'
-                      ? 'bg-rose-50 text-rose-800 border-rose-300'
-                      : 'bg-amber-50 text-amber-800 border-amber-300'
+                      : 'bg-rose-50 text-rose-800 border-rose-300'
                   }`}
                 >
                   <option value="UNPAID">UNPAID</option>
-                  <option value="PENDING">PENDING</option>
                   <option value="PAID">PAID</option>
                 </select>
               </div>

@@ -28,12 +28,26 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
 
   if (!isOpen || items.length === 0) return null;
 
+  // Filter items strictly to match store + kitchen + date
+  const targetStore = (toko || items[0]?.toko || '').trim().toLowerCase();
+  const targetKitchen = (tujuanDapur || items[0]?.tujuanDapur || '').trim().toLowerCase();
+  const targetDate = items[0]?.tanggal;
+
+  const scopedItems = items.filter((item) => {
+    const matchStore = !targetStore || item.toko.trim().toLowerCase() === targetStore;
+    const matchKitchen = !targetKitchen || item.tujuanDapur.trim().toLowerCase() === targetKitchen;
+    const matchDate = !targetDate || item.tanggal === targetDate;
+    return matchStore && matchKitchen && matchDate;
+  });
+
+  const displayItems = scopedItems.length > 0 ? scopedItems : items;
+
   const realTimeDate = formatTanggalRealtime();
-  const totalJual = items.reduce((sum, item) => sum + item.qty * item.hargaJual, 0);
+  const totalJual = displayItems.reduce((sum, item) => sum + item.qty * item.hargaJual, 0);
   const sisa = totalJual - bayar;
 
-  const mainKitchen = tujuanDapur || items[0]?.tujuanDapur || 'Singojuruh';
-  const mainStore = toko || items[0]?.toko || 'HTG';
+  const mainKitchen = tujuanDapur || displayItems[0]?.tujuanDapur || 'Singojuruh';
+  const mainStore = toko || displayItems[0]?.toko || 'HTG';
 
   const handlePrint = async () => {
     if (onSaveInvoiceRecord) {
@@ -64,8 +78,30 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               </div>
             </div>
 
-            {/* Action Buttons: ONLY ONE "Cetak PDF" Button + Close */}
-            <div className="flex items-center gap-3">
+            {/* Action Buttons: "Cetak PDF" & "Download DOCX" + Close */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={async () => {
+                  try {
+                    await downloadDocxInvoice({
+                      storeName: mainStore,
+                      kitchenName: mainKitchen,
+                      items: displayItems,
+                      invoiceNumber,
+                      bayar,
+                    });
+                  } catch (err: any) {
+                    alert(`Gagal download DOCX: ${err?.message || err}`);
+                  }
+                }}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 no-print"
+                title="Unduh Invoice format DOCX (Template Custom)"
+              >
+                <Receipt className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline">Export DOCX</span>
+                <span className="sm:hidden">DOCX</span>
+              </button>
+
               <button
                 onClick={handlePrint}
                 className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-md transition-all active:scale-95 print-include"
@@ -144,7 +180,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900 text-slate-900 font-medium">
-                  {items.map((item, idx) => {
+                  {displayItems.map((item, idx) => {
                     const subtotalJual = item.qty * item.hargaJual;
                     return (
                       <tr key={item.id} className="border-b border-slate-900">
