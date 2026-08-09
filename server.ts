@@ -4,11 +4,12 @@ import path from 'path';
 import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { convertDocxToPdfWithCloudConvert } from './src/lib/cloudConvert';
+import { compressDocxImages } from './src/lib/docxCompressor';
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 25 * 1024 * 1024, // 25MB limit to allow large initial uploads for auto-compression
   },
 });
 
@@ -130,15 +131,22 @@ async function startServer() {
         return res.status(400).json({ error: 'Data file DOCX tidak ditemukan dalam request.' });
       }
 
-      const fileSizeMB = (docxBuffer.length / (1024 * 1024)).toFixed(2);
-      console.log(`[Server API /api/convert-to-pdf] Terima file DOCX (${docxBuffer.length} bytes / ${fileSizeMB} MB)`);
+      const originalSizeBytes = docxBuffer.length;
+      const initialSizeMB = (originalSizeBytes / (1024 * 1024)).toFixed(2);
+      console.log(`[Server API /api/convert-to-pdf] Terima file DOCX (${originalSizeBytes} bytes / ${initialSizeMB} MB). Memulai auto-kompresi gambar...`);
 
-      // 4. Check payload size limit (Vercel serverless / platform function payload limit is 4.5 MB)
+      // Auto-compress images inside DOCX ZIP structure
+      docxBuffer = await compressDocxImages(docxBuffer);
+
+      const finalSizeBytes = docxBuffer.length;
+      const finalSizeMB = (finalSizeBytes / (1024 * 1024)).toFixed(2);
+
+      // Check payload size limit (CloudConvert/Vercel serverless platform function limit is 4.5 MB)
       const MAX_PAYLOAD_BYTES = 4.5 * 1024 * 1024;
-      if (docxBuffer.length > MAX_PAYLOAD_BYTES) {
-        console.warn(`[Server API /api/convert-to-pdf] Payload size (${fileSizeMB} MB) exceeds maximum limit (4.50 MB)`);
+      if (finalSizeBytes > MAX_PAYLOAD_BYTES) {
+        console.warn(`[Server API /api/convert-to-pdf] Payload size after compression (${finalSizeMB} MB) exceeds limit (4.50 MB)`);
         return res.status(413).json({
-          error: `Ukuran file DOCX (${fileSizeMB} MB) melebihi batas maksimum platform (4.50 MB). Harap kompres logo/gambar pada template Google Docs Anda sebesarnya agar ukuran file berada di bawah 4.5 MB.`,
+          error: `Ukuran file DOCX setelah kompresi otomatis (${finalSizeMB} MB) masih melebihi batas maksimum platform (4.50 MB, ukuran awal: ${initialSizeMB} MB). Harap kurangi ukuran logo/gambar pada template Google Docs Anda.`,
         });
       }
 
@@ -150,7 +158,7 @@ async function startServer() {
         });
       }
 
-      console.log(`[Server API] Converting DOCX (${fileSizeMB} MB) to PDF via CloudConvert API...`);
+      console.log(`[Server API] Converting DOCX (${finalSizeMB} MB) to PDF via CloudConvert API...`);
       const pdfBuffer = await convertDocxToPdfWithCloudConvert(docxBuffer, apiKey);
 
       res.setHeader('Content-Type', 'application/pdf');

@@ -1,4 +1,5 @@
 import { convertDocxToPdfWithCloudConvert } from '../src/lib/cloudConvert';
+import { compressDocxImages } from '../src/lib/docxCompressor';
 
 export const config = {
   api: {
@@ -34,6 +35,23 @@ export default async function handler(req: any, res: any) {
 
     if (!docxBuffer || docxBuffer.length === 0) {
       return res.status(400).json({ error: 'Data file DOCX tidak ditemukan dalam request.' });
+    }
+
+    const initialSizeMB = (docxBuffer.length / (1024 * 1024)).toFixed(2);
+    console.log(`[Vercel API /api/convert-to-pdf] Initial DOCX size: ${initialSizeMB} MB. Running auto image compression...`);
+
+    // Auto-compress images in DOCX zip archive
+    docxBuffer = await compressDocxImages(docxBuffer);
+
+    const finalSizeBytes = docxBuffer.length;
+    const finalSizeMB = (finalSizeBytes / (1024 * 1024)).toFixed(2);
+
+    const MAX_PAYLOAD_BYTES = 4.5 * 1024 * 1024;
+    if (finalSizeBytes > MAX_PAYLOAD_BYTES) {
+      console.warn(`[Vercel API /api/convert-to-pdf] Size after compression (${finalSizeMB} MB) exceeds 4.5MB limit`);
+      return res.status(413).json({
+        error: `Ukuran file DOCX setelah kompresi otomatis (${finalSizeMB} MB) masih melebihi batas maksimum platform (4.50 MB, ukuran awal: ${initialSizeMB} MB). Harap kurangi ukuran logo/gambar pada template Google Docs Anda.`,
+      });
     }
 
     const apiKey = (process.env.CLOUDCONVERT_API_KEY || customApiKey || '').trim();

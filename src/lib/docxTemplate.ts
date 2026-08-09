@@ -340,10 +340,10 @@ export async function exportInvoicePdf(
 
   console.log(`[Client PDF Export] Preparing DOCX (${docxSizeBytes} bytes / ${docxSizeMB} MB) for multipart/form-data upload`);
 
-  // Pre-flight client check: If size exceeds platform limit (4.5MB), notify user directly with size details
-  if (docxSizeBytes > 4.5 * 1024 * 1024) {
+  // Pre-flight client check: Allow up to 20MB upload so server auto-compressor can shrink template images
+  if (docxSizeBytes > 20 * 1024 * 1024) {
     throw new Error(
-      `Ukuran file template DOCX (${docxSizeMB} MB) melebihi batas maksimum pengiriman platform (4.50 MB). Harap kompres logo/gambar pada template Google Docs Anda sebesarnya agar ukuran file berada di bawah 4.5 MB.`
+      `Ukuran file template DOCX (${docxSizeMB} MB) terlalu besar untuk diunggah (batas maksimal 20.00 MB).`
     );
   }
 
