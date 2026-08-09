@@ -213,6 +213,16 @@ export default function App() {
 
     setIsSyncingGas(true);
     const res = await addRow('pesanan', {
+      NO: duplicated.id,
+      DAPUR: duplicated.tujuanDapur,
+      ITEM: duplicated.namaBarang,
+      DATE: duplicated.tanggal,
+      QTY: duplicated.qty,
+      TOKO: duplicated.toko,
+      PAYMENT: duplicated.paymentStatus || (duplicated.status === 'selesai' ? 'PAID' : 'UNPAID'),
+      DILEVERY: duplicated.deliveryStatus || (duplicated.status === 'selesai' ? 'DONE' : 'PENDING'),
+      'H. JUAL': duplicated.hargaJual,
+      'H. BELI': duplicated.hargaBeli,
       id: duplicated.id,
       tanggal: duplicated.tanggal,
       toko: duplicated.toko,
@@ -277,6 +287,16 @@ export default function App() {
       };
 
       const res = await addRow('pesanan', {
+        NO: newOrderItem.id,
+        DAPUR: newOrderItem.tujuanDapur,
+        ITEM: newOrderItem.namaBarang,
+        DATE: newOrderItem.tanggal,
+        QTY: newOrderItem.qty,
+        TOKO: newOrderItem.toko,
+        PAYMENT: newOrderItem.paymentStatus || (newOrderItem.status === 'selesai' ? 'PAID' : 'UNPAID'),
+        DILEVERY: newOrderItem.deliveryStatus || (newOrderItem.status === 'selesai' ? 'DONE' : 'PENDING'),
+        'H. JUAL': newOrderItem.hargaJual,
+        'H. BELI': newOrderItem.hargaBeli,
         id: newOrderItem.id,
         tanggal: newOrderItem.tanggal,
         toko: newOrderItem.toko,
@@ -440,6 +460,15 @@ export default function App() {
     setIsSyncingGas(true);
     // POST payload to sheet "transaksi"
     const txData = {
+      NO: newRecord.invoiceNumber,
+      TANGGAL: newRecord.tanggalPrint,
+      PEMASOK: newRecord.items[0]?.pemasok || 'Pemasok 1',
+      BARANG: newRecord.items.map((i) => `${i.namaBarang} (${i.qty})`).join(', '),
+      TOKO: newRecord.toko,
+      QTY: newRecord.items.reduce((sum, item) => sum + item.qty, 0),
+      'H. BELI': newRecord.totalBeli,
+      TOTAL: newRecord.totalJual,
+      STATUS: 'LUNAS',
       id: newRecord.id,
       invoiceNumber: newRecord.invoiceNumber,
       tanggalPrint: newRecord.tanggalPrint,
@@ -509,6 +538,16 @@ export default function App() {
       };
 
       const saveRes = await addRow('pesanan', {
+        NO: newOrderItem.id,
+        DAPUR: newOrderItem.tujuanDapur,
+        ITEM: newOrderItem.namaBarang,
+        DATE: newOrderItem.tanggal,
+        QTY: newOrderItem.qty,
+        TOKO: newOrderItem.toko,
+        PAYMENT: 'UNPAID',
+        DILEVERY: 'PENDING',
+        'H. JUAL': newOrderItem.hargaJual,
+        'H. BELI': newOrderItem.hargaBeli,
         id: newOrderItem.id,
         tanggal: newOrderItem.tanggal,
         toko: newOrderItem.toko,

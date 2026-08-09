@@ -38,6 +38,11 @@ export async function addRow(
     data,
   };
 
+  // Log object "data" & payload ke console SEBELUM melakukan fetch POST
+  console.log(`[GoogleSheets addRow] Sheet: "${sheet}"`);
+  console.log('[GoogleSheets addRow] Data Object (Keys & Values):', data);
+  console.log('[GoogleSheets addRow] Full POST Payload:', JSON.stringify(payload, null, 2));
+
   try {
     const response = await fetch(GAS_BASE_URL, {
       method: 'POST',
@@ -90,24 +95,24 @@ export async function addRow(
  * Mapper helper untuk baris raw dari Sheet Pesanan ke TypeScript OrderItem
  */
 export function mapRawOrder(row: any): OrderItem {
-  const statusStr = (row.status || 'pending').toString().toLowerCase();
-  const status = statusStr === 'selesai' ? 'selesai' : 'pending';
-  const payStatus = row.paymentStatus || row.payment_status || (status === 'selesai' ? 'PAID' : 'UNPAID');
-  const delStatus = row.deliveryStatus || row.delivery_status || (status === 'selesai' ? 'DONE' : 'PENDING');
+  const statusStr = (row.STATUS || row.status || 'pending').toString().toLowerCase();
+  const status = statusStr === 'selesai' || statusStr === 'done' ? 'selesai' : 'pending';
+  const payStatus = row.PAYMENT || row.paymentStatus || row.payment_status || (status === 'selesai' ? 'PAID' : 'UNPAID');
+  const delStatus = row.DILEVERY || row.DELIVERY || row.deliveryStatus || row.delivery_status || (status === 'selesai' ? 'DONE' : 'PENDING');
 
   return {
-    id: (row.id || row.ID || `ord-${Date.now()}-${Math.floor(Math.random() * 10000)}`).toString(),
-    namaBarang: (row.namaBarang || row.nama_barang || row['Nama Barang'] || '').toString(),
-    qty: Number(row.qty || row.Qty || row.jumlah) || 0,
-    hargaBeli: Number(row.hargaBeli || row.harga_beli || row['Harga Beli']) || 0,
-    hargaJual: Number(row.hargaJual || row.harga_jual || row['Harga Jual']) || 0,
-    toko: (row.toko || row.Toko || '').toString(),
-    tujuanDapur: (row.tujuanDapur || row.tujuan_dapur || row['Tujuan Dapur'] || '').toString(),
-    pemasok: (row.pemasok || row.Pemasok || '').toString(),
+    id: (row.NO || row.no || row.id || row.ID || `ord-${Date.now()}-${Math.floor(Math.random() * 10000)}`).toString(),
+    namaBarang: (row.ITEM || row.item || row.namaBarang || row.nama_barang || row['Nama Barang'] || '').toString(),
+    qty: Number(row.QTY || row.qty || row.Qty || row.jumlah) || 0,
+    hargaBeli: Number(row['H. BELI'] || row['H.BELI'] || row.hargaBeli || row.harga_beli || row['Harga Beli']) || 0,
+    hargaJual: Number(row['H. JUAL'] || row['H.JUAL'] || row.hargaJual || row.harga_jual || row['Harga Jual']) || 0,
+    toko: (row.TOKO || row.toko || row.Toko || '').toString(),
+    tujuanDapur: (row.DAPUR || row.dapur || row.tujuanDapur || row.tujuan_dapur || row['Tujuan Dapur'] || '').toString(),
+    pemasok: (row.PEMASOK || row.pemasok || row.Pemasok || '').toString(),
     status,
     paymentStatus: payStatus === 'PAID' ? 'PAID' : 'UNPAID',
     deliveryStatus: delStatus === 'DONE' ? 'DONE' : 'PENDING',
-    tanggal: (row.tanggal || row.Tanggal || new Date().toISOString().split('T')[0]).toString(),
+    tanggal: (row.DATE || row.date || row.tanggal || row.Tanggal || new Date().toISOString().split('T')[0]).toString(),
     createdAt: (row.createdAt || row.created_at || new Date().toISOString()).toString(),
     catatan: (row.catatan || row.Catatan || '').toString(),
   };
@@ -129,15 +134,15 @@ export function mapRawInvoice(row: any): InvoiceRecord {
   }
 
   return {
-    id: (row.id || row.ID || `inv-${Date.now()}-${Math.floor(Math.random() * 10000)}`).toString(),
-    invoiceNumber: (row.invoiceNumber || row.invoice_number || row['Nomor Invoice'] || '').toString(),
-    tanggalPrint: (row.tanggalPrint || row.tanggal_print || row['Tanggal Print'] || '').toString(),
+    id: (row.NO || row.no || row.id || row.ID || `inv-${Date.now()}-${Math.floor(Math.random() * 10000)}`).toString(),
+    invoiceNumber: (row.NO || row.no || row.invoiceNumber || row.invoice_number || row['Nomor Invoice'] || '').toString(),
+    tanggalPrint: (row.TANGGAL || row.tanggal || row.tanggalPrint || row.tanggal_print || row['Tanggal Print'] || '').toString(),
     createdAt: (row.createdAt || row.created_at || new Date().toISOString()).toString(),
-    tujuanDapur: (row.tujuanDapur || row.tujuan_dapur || '').toString(),
-    toko: (row.toko || row.Toko || '').toString(),
+    tujuanDapur: (row.DAPUR || row.dapur || row.tujuanDapur || row.tujuan_dapur || '').toString(),
+    toko: (row.TOKO || row.toko || row.Toko || '').toString(),
     items,
-    totalBeli: Number(row.totalBeli || row.total_beli) || 0,
-    totalJual: Number(row.totalJual || row.total_jual) || 0,
+    totalBeli: Number(row['H. BELI'] || row.totalBeli || row.total_beli) || 0,
+    totalJual: Number(row.TOTAL || row.totalJual || row.total_jual) || 0,
     totalProfit: Number(row.totalProfit || row.total_profit) || 0,
   };
 }
