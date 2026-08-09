@@ -1,8 +1,8 @@
 const TEMPLATE_URLS: Record<string, string> = {
-  "LUWENG BOGA": "https://docs.google.com/document/d/178rvld0b0QB5ZgNryG_P1fVFyTrx2RcG/export?format=docx",
-  "HTG": "https://docs.google.com/document/d/14LO9lhajdxQ0Mpnx5X-En-rhzpyLtJAe/export?format=docx",
-  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1mE9-edW_0Sh4evlEUcVUUpWUtCrX_xCD/export?format=docx",
-  "PROHE": "https://docs.google.com/document/d/1FwifnVpOfLlb2bN4mZBaPCmO7xZ8HuoA/export?format=docx"
+  "LUWENG BOGA": "https://docs.google.com/document/d/1GoLCYZnsf27NMaNYAiDbkgbVavGS4eGu/export?format=docx",
+  "HTG": "https://docs.google.com/document/d/1TRhM_wW6z5FqGLXYAuXf5-vv28-CBFYe/export?format=docx",
+  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1mu0MjtyESAVNhdE-myKdZ3ydF9XReN78/export?format=docx",
+  "PROHE": "https://docs.google.com/document/d/1YboT-odlgjZTCMO94MrsjiZgFh69NSJ8/export?format=docx"
 };
 
 function getGoogleDocTemplateUrl(storeName: string): string {

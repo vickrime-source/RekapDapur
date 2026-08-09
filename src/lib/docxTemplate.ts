@@ -2,14 +2,21 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 import html2pdf from 'html2pdf.js';
+import { renderAsync } from 'docx-preview';
 import { OrderItem } from '../types';
-import { formatRupiah, formatTanggal, formatTanggalRealtime, parseIndonesianNumber, generateInvoiceNumber } from './formatters';
+import {
+  formatRupiah,
+  formatTanggal,
+  formatTanggalRealtime,
+  parseIndonesianNumber,
+  generateInvoiceNumber,
+} from './formatters';
 
 export const TEMPLATE_URLS: Record<string, string> = {
-  "LUWENG BOGA": "https://docs.google.com/document/d/178rvld0b0QB5ZgNryG_P1fVFyTrx2RcG/export?format=docx",
-  "HTG": "https://docs.google.com/document/d/14LO9lhajdxQ0Mpnx5X-En-rhzpyLtJAe/export?format=docx",
-  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1mE9-edW_0Sh4evlEUcVUUpWUtCrX_xCD/export?format=docx",
-  "PROHE": "https://docs.google.com/document/d/1FwifnVpOfLlb2bN4mZBaPCmO7xZ8HuoA/export?format=docx"
+  "LUWENG BOGA": "https://docs.google.com/document/d/1GoLCYZnsf27NMaNYAiDbkgbVavGS4eGu/export?format=docx",
+  "HTG": "https://docs.google.com/document/d/1TRhM_wW6z5FqGLXYAuXf5-vv28-CBFYe/export?format=docx",
+  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1mu0MjtyESAVNhdE-myKdZ3ydF9XReN78/export?format=docx",
+  "PROHE": "https://docs.google.com/document/d/1YboT-odlgjZTCMO94MrsjiZgFh69NSJ8/export?format=docx"
 };
 
 export const INVOICE_TEMPLATES = TEMPLATE_URLS;
@@ -61,6 +68,28 @@ export interface ExportInvoiceOptions {
 }
 
 /**
+ * Format docxtemplater errors into detailed messages for debugging
+ */
+function formatDocxtemplaterErrors(err: any, storeName: string): string {
+  console.error(`[docxtemplater Error on store "${storeName}"]:`, err);
+
+  if (err.properties && Array.isArray(err.properties.errors)) {
+    const errorList = err.properties.errors
+      .map((e: any, idx: number) => {
+        const explanation = e.properties?.explanation || e.message || 'Syntax/Tag Error';
+        const tag = e.properties?.id || e.properties?.xtag || e.properties?.context || '';
+        const file = e.properties?.file || '';
+        return `${idx + 1}. ${explanation} ${tag ? `[Tag: "${tag}"]` : ''} ${file ? `(${file})` : ''}`;
+      })
+      .join('\n');
+
+    return `MultiError (${err.properties.errors.length} error pada template "${storeName}"):\n${errorList}`;
+  }
+
+  return `TemplateError pada template "${storeName}": ${err?.message || err}`;
+}
+
+/**
  * Prepare and filter transaction items strictly by store, kitchen, and date
  */
 export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
@@ -105,11 +134,13 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
     return {
       no: index + 1,
       NO: index + 1,
-      banyaknya: q,
-      BANYAKNYA: q,
       qty: q,
       QTY: q,
+      banyaknya: q,
+      BANYAKNYA: q,
 
+      nama: item.namaBarang,
+      NAMA: item.namaBarang,
       namaItem: item.namaBarang,
       NAMA_ITEM: item.namaBarang,
       nama_item: item.namaBarang,
@@ -120,8 +151,6 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
       BARANG: item.namaBarang,
       item: item.namaBarang,
       ITEM: item.namaBarang,
-      nama: item.namaBarang,
-      NAMA: item.namaBarang,
 
       harga: formatRupiah(unitPrice),
       HARGA: formatRupiah(unitPrice),
@@ -141,7 +170,8 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
   const parsedBayar = parseIndonesianNumber(bayar);
   const sisa = grandTotal - parsedBayar;
 
-  // Data Context containing all placeholders: {{tgl}}, {{nama}}, {{alamat}}, {{nomor}}, {{TOTAL}}
+  // Exact Data Context required by docxtemplater:
+  // { tgl, nama, alamat, nomor, TOTAL, bayar, sisa, items: [...] }
   const dataContext = {
     // Dates
     tgl: formattedDate,
@@ -150,27 +180,19 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
     TANGGAL: formattedDate,
     raw_tanggal: rawDate,
 
-    // Kitchen / Recipient Name
+    // Recipient Info
     nama: displayNama,
     NAMA: displayNama,
     dapur: displayNama,
     DAPUR: displayNama,
     kitchen: displayNama,
     tujuanDapur: displayNama,
-    TUJUAN_DAPUR: displayNama,
     kepada: displayNama,
     KEPADA: displayNama,
 
-    // Address
     alamat: displayAlamat,
     ALAMAT: displayAlamat,
 
-    // Store Info
-    toko: storeName,
-    TOKO: storeName,
-    store: storeName,
-
-    // Invoice Number / Phone / HP
     nomor: displayNomor,
     NOMOR: displayNomor,
     no: displayNomor,
@@ -178,17 +200,22 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
     invoiceNumber: autoInvoiceNo,
     INVOICE_NUMBER: autoInvoiceNo,
 
+    // Store Info
+    toko: storeName,
+    TOKO: storeName,
+    store: storeName,
+
     // Totals
     total: formatRupiah(grandTotal),
     TOTAL: formatRupiah(grandTotal),
-    totalJual: formatRupiah(grandTotal),
 
     bayar: formatRupiah(parsedBayar),
     BAYAR: formatRupiah(parsedBayar),
+
     sisa: formatRupiah(sisa),
     SISA: formatRupiah(sisa),
 
-    // Dynamic Items Table Loops
+    // Array of items
     items: itemsFormatted,
     ITEMS: itemsFormatted,
     orders: itemsFormatted,
@@ -217,7 +244,7 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
  */
 export async function fetchDocxTemplateBuffer(storeName: string): Promise<ArrayBuffer> {
   const proxyUrl = `/api/fetch-template?toko=${encodeURIComponent(storeName)}`;
-  
+
   try {
     const response = await fetch(proxyUrl);
     if (response.ok) {
@@ -237,7 +264,11 @@ export async function fetchDocxTemplateBuffer(storeName: string): Promise<ArrayB
 }
 
 /**
- * Main Export Function: Triggered EXCLUSIVELY when clicking the print icon in row AKSI column
+ * Main Export Function:
+ * 1. Fetch docx template for store
+ * 2. Fill data via docxtemplater
+ * 3. Save filled docx file
+ * 4. Convert filled docx directly to PDF via docx-preview & html2pdf (NO hardcoded HTML templates)
  */
 export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<void> {
   const { storeName, kitchenName } = options;
@@ -246,13 +277,8 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
   const {
     validItems,
     dataContext,
-    grandTotal,
     autoInvoiceNo,
-    formattedDate,
     rawDate,
-    itemsFormatted,
-    parsedBayar,
-    sisa,
   } = prepareScopedInvoiceData(options);
 
   if (validItems.length === 0) {
@@ -270,124 +296,60 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
     nullGetter: () => '',
   });
 
-  doc.render(dataContext);
-
-  // 4. Generate filled docx blob and save
-  const docxBlob = doc.getZip().generate({
-    type: 'blob',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  });
+  let docxBlob: Blob;
+  try {
+    doc.render(dataContext);
+    docxBlob = doc.getZip().generate({
+      type: 'blob',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+  } catch (err: any) {
+    const errorDetails = formatDocxtemplaterErrors(err, storeName);
+    throw new Error(errorDetails);
+  }
 
   const baseFileName = `Invoice_${storeName.replace(/\s+/g, '_')}_${kitchenName.replace(/\s+/g, '_')}_${rawDate}`;
+
+  // Download filled DOCX file
   saveAs(docxBlob, `${baseFileName}.docx`);
 
-  // 5. Generate PDF export using html2pdf.js from rendered HTML template element
+  // 4. Render filled DOCX into DOM using docx-preview, then convert to PDF using html2pdf.js
   const pdfContainer = document.createElement('div');
   pdfContainer.style.position = 'absolute';
   pdfContainer.style.left = '-9999px';
   pdfContainer.style.top = '-9999px';
-  pdfContainer.style.width = '794px'; // A4 width in px at 96 DPI
-  pdfContainer.style.padding = '40px';
+  pdfContainer.style.width = '800px';
   pdfContainer.style.backgroundColor = '#ffffff';
-  pdfContainer.style.color = '#0f172a';
-  pdfContainer.style.fontFamily = 'sans-serif';
-
-  let companyName = `CV. HANDAI TOLAN GROUP — ${storeName.toUpperCase()}`;
-  const normStore = storeName.toUpperCase();
-  if (normStore.includes('LEMBUNG') || normStore.includes('LUWENG') || normStore.includes('BOGA') || normStore.includes('LB')) {
-    companyName = 'LUWENG BOGA';
-  } else if (normStore.includes('LUMBUNG') || normStore.includes('ADIFRUTA') || normStore.includes('FRUITA') || normStore.includes('LA')) {
-    companyName = 'LUMBUNG ADIFRUTA';
-  } else if (normStore.includes('PROHE') || normStore.includes('PW')) {
-    companyName = 'PROHE';
-  }
-
-  pdfContainer.innerHTML = `
-    <div style="font-family: sans-serif; color: #0f172a; padding: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px;">
-        <div>
-          <h1 style="font-size: 16px; font-weight: 900; margin: 0; text-transform: uppercase;">${companyName}</h1>
-          <p style="font-size: 11px; margin: 4px 0 0 0; color: #475569;">Banyuwangi, Jawa Timur</p>
-        </div>
-        <div style="text-align: right;">
-          <h2 style="font-size: 18px; font-weight: 900; margin: 0; color: #0f172a;">INVOICE</h2>
-          <p style="font-size: 11px; margin: 4px 0 0 0; font-family: monospace;">No: <strong>${autoInvoiceNo}</strong></p>
-          <p style="font-size: 11px; margin: 2px 0 0 0;">Tgl: <strong>${formattedDate}</strong></p>
-        </div>
-      </div>
-
-      <div style="margin-bottom: 20px; font-size: 12px;">
-        <p style="margin: 0; font-weight: bold; color: #475569;">KEPADA / DAPUR TUJUAN:</p>
-        <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 900; color: #0f172a;">${options.customNama || kitchenName}</p>
-        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Alamat: ${options.customAlamat || 'Banyuwangi'}</p>
-        ${options.customNomor ? `<p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Telp/HP: ${options.customNomor}</p>` : ''}
-      </div>
-
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px;">
-        <thead>
-          <tr style="background-color: #f1f5f9; border-top: 1.5px solid #0f172a; border-bottom: 1.5px solid #0f172a;">
-            <th style="padding: 8px; text-align: center; width: 40px;">NO</th>
-            <th style="padding: 8px; text-align: center; width: 60px;">QTY</th>
-            <th style="padding: 8px; text-align: left;">NAMA BARANG</th>
-            <th style="padding: 8px; text-align: right; width: 110px;">HARGA</th>
-            <th style="padding: 8px; text-align: right; width: 120px;">JUMLAH</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsFormatted.map((it) => `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 8px; text-align: center; font-weight: bold;">${it.no}</td>
-              <td style="padding: 8px; text-align: center; font-weight: bold;">${it.qty}</td>
-              <td style="padding: 8px; font-weight: bold;">
-                ${it.namaBarang}
-                ${it.catatan ? `<br/><span style="font-size: 9px; color: #64748b; font-weight: normal;">*${it.catatan}</span>` : ''}
-              </td>
-              <td style="padding: 8px; text-align: right;">${it.harga}</td>
-              <td style="padding: 8px; text-align: right; font-weight: 900;">${it.jumlah}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-        <div style="width: 250px; font-size: 12px;">
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 2px solid #0f172a; font-weight: 900; font-size: 14px;">
-            <span>TOTAL:</span>
-            <span>${formatRupiah(grandTotal)}</span>
-          </div>
-          ${parsedBayar > 0 ? `
-            <div style="display: flex; justify-content: space-between; padding: 4px 0; font-weight: bold; color: #166534;">
-              <span>BAYAR:</span>
-              <span>${formatRupiah(parsedBayar)}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 4px 0; font-weight: bold; color: #991b1b;">
-              <span>SISA:</span>
-              <span>${formatRupiah(sisa)}</span>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    </div>
-  `;
-
+  pdfContainer.style.padding = '20px';
   document.body.appendChild(pdfContainer);
 
   try {
+    await renderAsync(docxBlob, pdfContainer, undefined, {
+      inWrapper: false,
+      ignoreWidth: false,
+      ignoreHeight: false,
+    });
+
     const pdfOptions = {
-      margin: 8,
+      margin: 6,
       filename: `${baseFileName}.pdf`,
       image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
     };
 
     await html2pdf().set(pdfOptions).from(pdfContainer).save();
+  } catch (pdfErr: any) {
+    console.error('Konversi PDF dari DOCX gagal:', pdfErr);
+    throw new Error(`File DOCX berhasil didownload (${baseFileName}.docx), namun konversi PDF gagal:\n${pdfErr?.message || pdfErr}`);
   } finally {
-    document.body.removeChild(pdfContainer);
+    if (document.body.contains(pdfContainer)) {
+      document.body.removeChild(pdfContainer);
+    }
   }
 }
 
 /**
- * Backwards compatibility alias for downloadDocxInvoice
+ * Backwards compatibility alias
  */
 export const downloadDocxInvoice = exportInvoicePdf;
