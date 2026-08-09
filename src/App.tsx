@@ -21,6 +21,7 @@ import { DashboardView } from './components/DashboardView';
 import { TransactionsView } from './components/TransactionsView';
 import { OrderModal } from './components/OrderModal';
 import { InvoiceModal } from './components/InvoiceModal';
+import { InvoiceFormModal } from './components/InvoiceFormModal';
 import { TextImportModal } from './components/TextImportModal';
 import { ExportModal } from './components/ExportModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -108,6 +109,16 @@ export default function App() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<OrderItem | null>(null);
   const [prefilledKitchen, setPrefilledKitchen] = useState<string | undefined>();
+
+  // Invoice Form (Step 1 Confirmation) & Invoice Modal (Step 2 Preview) States
+  const [isInvoiceFormOpen, setIsInvoiceFormOpen] = useState(false);
+  const [invoiceFormItems, setInvoiceFormItems] = useState<OrderItem[]>([]);
+  const [invoiceFormKitchen, setInvoiceFormKitchen] = useState<string | undefined>();
+  const [invoiceFormStore, setInvoiceFormStore] = useState<string | undefined>();
+
+  const [invoiceRecipientName, setInvoiceRecipientName] = useState('');
+  const [invoiceRecipientAddress, setInvoiceRecipientAddress] = useState('');
+  const [invoiceRecipientPhone, setInvoiceRecipientPhone] = useState('');
 
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [invoiceItems, setInvoiceItems] = useState<OrderItem[]>([]);
@@ -236,7 +247,13 @@ export default function App() {
   };
 
   // Handlers for Invoice
-  const handleOpenInvoice = (items: OrderItem[], kitchenName?: string, storeName?: string) => {
+  // Step 1: Open Confirmation Form Modal when print icon (🖨) is clicked
+  const handleStartInvoiceFlow = (
+    items: OrderItem[],
+    kitchenName?: string,
+    storeName?: string,
+    _dateStr?: string
+  ) => {
     if (items.length === 0) {
       alert('Tidak ada item untuk dibuatkan invoice');
       return;
@@ -244,7 +261,7 @@ export default function App() {
 
     const mainKitchen = kitchenName || items[0]?.tujuanDapur;
     const mainStore = storeName || items[0]?.toko;
-    const mainDate = items[0]?.tanggal;
+    const mainDate = _dateStr || items[0]?.tanggal;
 
     const normStore = (mainStore || '').trim().toLowerCase();
     const normKitchen = (mainKitchen || '').trim().toLowerCase();
@@ -258,12 +275,34 @@ export default function App() {
     });
 
     const finalItems = scopedItems.length > 0 ? scopedItems : items;
-    const invNum = generateInvoiceNumber(mainKitchen);
 
-    setInvoiceItems(finalItems);
+    setInvoiceFormItems(finalItems);
+    setInvoiceFormKitchen(mainKitchen);
+    setInvoiceFormStore(mainStore);
+    setIsInvoiceFormOpen(true);
+  };
+
+  // Step 2: Confirmed form, proceed to Preview Invoice Modal
+  const handleConfirmInvoiceForm = (data: {
+    items: OrderItem[];
+    kitchenName: string;
+    storeName: string;
+    recipientName: string;
+    address: string;
+    phone: string;
+  }) => {
+    setIsInvoiceFormOpen(false);
+
+    setInvoiceRecipientName(data.recipientName);
+    setInvoiceRecipientAddress(data.address);
+    setInvoiceRecipientPhone(data.phone);
+
+    const invNum = generateInvoiceNumber(data.kitchenName);
+
+    setInvoiceItems(data.items);
     setInvoiceNumber(invNum);
-    setInvoiceTargetKitchen(mainKitchen);
-    setInvoiceTargetStore(mainStore);
+    setInvoiceTargetKitchen(data.kitchenName);
+    setInvoiceTargetStore(data.storeName);
     setIsInvoiceModalOpen(true);
   };
 
@@ -387,7 +426,8 @@ export default function App() {
                   onDeleteOrder={handleDeleteOrder}
                   onDeleteKitchenOrders={handleDeleteKitchenOrders}
                   onOpenAddModal={handleOpenAddModal}
-                  onOpenInvoiceModal={handleOpenInvoice}
+                  onOpenInvoiceModal={handleStartInvoiceFlow}
+                  onExportInvoicePdf={handleStartInvoiceFlow}
                   kitchens={kitchens}
                   stores={stores}
                 />
@@ -410,7 +450,7 @@ export default function App() {
                   onEditOrder={handleOpenEditOrder}
                   onDeleteOrder={handleDeleteOrder}
                   onDeleteKitchenOrders={handleDeleteKitchenOrders}
-                  onOpenInvoiceModal={handleOpenInvoice}
+                  onOpenInvoiceModal={handleStartInvoiceFlow}
                   onDeleteInvoice={handleDeleteInvoice}
                   onOpenAddModal={handleOpenAddModal}
                 />
@@ -459,7 +499,18 @@ export default function App() {
         selectedDate={selectedDate}
       />
 
-      {/* 2. Invoice Printable Modal */}
+      {/* 2. Invoice Form Modal (Step 1 Confirmation) */}
+      <InvoiceFormModal
+        isOpen={isInvoiceFormOpen}
+        onClose={() => setIsInvoiceFormOpen(false)}
+        items={invoiceFormItems}
+        kitchenName={invoiceFormKitchen}
+        storeName={invoiceFormStore}
+        kitchens={kitchens}
+        onConfirm={handleConfirmInvoiceForm}
+      />
+
+      {/* 3. Invoice Printable Modal (Step 2 Preview & Export) */}
       <InvoiceModal
         isOpen={isInvoiceModalOpen}
         onClose={() => setIsInvoiceModalOpen(false)}
@@ -467,6 +518,9 @@ export default function App() {
         items={invoiceItems}
         tujuanDapur={invoiceTargetKitchen}
         toko={invoiceTargetStore}
+        recipientName={invoiceRecipientName}
+        recipientAddress={invoiceRecipientAddress}
+        recipientPhone={invoiceRecipientPhone}
         onSaveInvoiceRecord={handleSaveInvoiceRecord}
       />
 

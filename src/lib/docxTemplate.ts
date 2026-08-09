@@ -55,6 +55,9 @@ export interface ExportInvoiceOptions {
   invoiceNumber?: string;
   dateStr?: string;
   bayar?: number;
+  customNama?: string;
+  customAlamat?: string;
+  customNomor?: string;
 }
 
 /**
@@ -86,6 +89,10 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
 
   const formattedDate = targetDate ? formatTanggal(targetDate, false) : formatTanggalRealtime();
   const rawDate = targetDate || new Date().toISOString().split('T')[0];
+
+  const displayNama = options.customNama || kitchenName;
+  const displayAlamat = options.customAlamat || 'Banyuwangi';
+  const displayNomor = options.customNomor || autoInvoiceNo;
 
   // 3. Calculate TOTAL using parseIndonesianNumber
   let grandTotal = 0;
@@ -144,30 +151,30 @@ export function prepareScopedInvoiceData(options: ExportInvoiceOptions) {
     raw_tanggal: rawDate,
 
     // Kitchen / Recipient Name
-    nama: kitchenName,
-    NAMA: kitchenName,
-    dapur: kitchenName,
-    DAPUR: kitchenName,
-    kitchen: kitchenName,
-    tujuanDapur: kitchenName,
-    TUJUAN_DAPUR: kitchenName,
-    kepada: kitchenName,
-    KEPADA: kitchenName,
+    nama: displayNama,
+    NAMA: displayNama,
+    dapur: displayNama,
+    DAPUR: displayNama,
+    kitchen: displayNama,
+    tujuanDapur: displayNama,
+    TUJUAN_DAPUR: displayNama,
+    kepada: displayNama,
+    KEPADA: displayNama,
 
     // Address
-    alamat: 'Banyuwangi',
-    ALAMAT: 'Banyuwangi',
+    alamat: displayAlamat,
+    ALAMAT: displayAlamat,
 
     // Store Info
     toko: storeName,
     TOKO: storeName,
     store: storeName,
 
-    // Invoice Number
-    nomor: autoInvoiceNo,
-    NOMOR: autoInvoiceNo,
-    no: autoInvoiceNo,
-    NO: autoInvoiceNo,
+    // Invoice Number / Phone / HP
+    nomor: displayNomor,
+    NOMOR: displayNomor,
+    no: displayNomor,
+    NO: displayNomor,
     invoiceNumber: autoInvoiceNo,
     INVOICE_NUMBER: autoInvoiceNo,
 
@@ -311,8 +318,9 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
 
       <div style="margin-bottom: 20px; font-size: 12px;">
         <p style="margin: 0; font-weight: bold; color: #475569;">KEPADA / DAPUR TUJUAN:</p>
-        <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 900; color: #0f172a;">${kitchenName}</p>
-        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Alamat: Banyuwangi</p>
+        <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 900; color: #0f172a;">${options.customNama || kitchenName}</p>
+        <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Alamat: ${options.customAlamat || 'Banyuwangi'}</p>
+        ${options.customNomor ? `<p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">Telp/HP: ${options.customNomor}</p>` : ''}
       </div>
 
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px;">

@@ -12,6 +12,9 @@ interface InvoiceModalProps {
   items: OrderItem[];
   tujuanDapur?: string;
   toko?: string;
+  recipientName?: string;
+  recipientAddress?: string;
+  recipientPhone?: string;
   onSaveInvoiceRecord?: () => void;
 }
 
@@ -22,6 +25,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   items,
   tujuanDapur,
   toko,
+  recipientName,
+  recipientAddress,
+  recipientPhone,
   onSaveInvoiceRecord,
 }) => {
   const [bayar, setBayar] = useState<number>(0);
@@ -137,6 +143,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                       items: displayItems,
                       invoiceNumber,
                       bayar,
+                      customNama: recipientName || mainKitchen,
+                      customAlamat: recipientAddress || 'Banyuwangi',
+                      customNomor: recipientPhone || invoiceNumber,
                     });
                   } catch (err: any) {
                     alert(`Gagal Export PDF:\n${err?.message || err}`);
@@ -197,9 +206,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 </p>
                 <div className="pt-2">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">KEPADA YTH.</span>
-                  <h2 className="text-sm font-extrabold text-slate-900">{mainKitchen}</h2>
-                  <p className="text-xs text-slate-700 font-medium">Bwi</p>
-                  <p className="text-xs text-slate-700 font-medium">082229992371</p>
+                  <h2 className="text-sm font-extrabold text-slate-900">{recipientName || mainKitchen}</h2>
+                  <p className="text-xs text-slate-700 font-medium">{recipientAddress || 'Banyuwangi'}</p>
+                  {recipientPhone && <p className="text-xs text-slate-700 font-medium">{recipientPhone}</p>}
                 </div>
                 <div className="text-[10px] font-mono text-slate-500 pt-1">
                   No. Ref: {invoiceNumber}
