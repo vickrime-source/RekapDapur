@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
@@ -72,10 +73,11 @@ async function startServer() {
         return res.status(400).json({ error: 'Parameter docxBase64 wajib diisi.' });
       }
 
-      const apiKey = customApiKey || process.env.CLOUDCONVERT_API_KEY || '';
+      const apiKey = (process.env.CLOUDCONVERT_API_KEY || customApiKey || '').trim();
       if (!apiKey) {
+        console.error('[Server API Error /api/convert-to-pdf]: CLOUDCONVERT_API_KEY environment variable is not set.');
         return res.status(400).json({
-          error: 'CLOUDCONVERT_API_KEY tidak dikonfigurasi di environment server. Harap set CLOUDCONVERT_API_KEY.',
+          error: 'CLOUDCONVERT_API_KEY tidak dikonfigurasi di environment variable server. Harap set CLOUDCONVERT_API_KEY.',
         });
       }
 
@@ -88,7 +90,7 @@ async function startServer() {
       res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
       return res.status(200).send(pdfBuffer);
     } catch (err: any) {
-      console.error('[Convert PDF Server Error]:', err);
+      console.error('[Convert PDF Server Error Exception]:', err);
       return res.status(500).json({
         error: err?.message || 'Gagal melakukan konversi PDF via CloudConvert',
       });

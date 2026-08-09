@@ -7,7 +7,7 @@ export async function convertDocxToPdfWithCloudConvert(
 ): Promise<Buffer> {
   const cleanKey = (apiKey || '').trim();
   if (!cleanKey) {
-    throw new Error('API Key CloudConvert tidak dikonfigurasi. Harap isi CLOUDCONVERT_API_KEY di environment server.');
+    throw new Error('API Key CloudConvert tidak dikonfigurasi. Harap tentukan CLOUDCONVERT_API_KEY di environment variable server.');
   }
 
   console.log('[CloudConvert] Membuat Job konversi DOCX ke PDF...');
@@ -41,8 +41,23 @@ export async function convertDocxToPdfWithCloudConvert(
 
   if (!createJobRes.ok) {
     const errText = await createJobRes.text();
-    console.error('[CloudConvert] Failed creating job:', createJobRes.status, errText);
-    throw new Error(`CloudConvert API Response Error (${createJobRes.status}): ${errText}`);
+    console.error(`[CloudConvert API Error - Create Job] Status Code: ${createJobRes.status}`);
+    console.error(`[CloudConvert API Response Body]:`, errText);
+    
+    if (createJobRes.status === 403 || errText.includes('Invalid scope')) {
+      throw new Error(
+        `CloudConvert API Error (403): API Key tidak memiliki izin/scope yang cukup ("Invalid scope(s) provided"). API Key saat ini hanya memiliki scope 'user.read/user.write'. Harap buat API Key baru di CloudConvert Dashboard (https://cloudconvert.com/dashboard/api/v1/keys) dan centang scope 'task.read', 'task.write', 'task.create' (atau centang ALL SCOPES).`
+      );
+    }
+
+    let errorDetail = errText;
+    try {
+      const parsed = JSON.parse(errText);
+      if (parsed.message) errorDetail = parsed.message;
+      if (parsed.errors) errorDetail += ' | ' + JSON.stringify(parsed.errors);
+    } catch (_) {}
+
+    throw new Error(`CloudConvert API Error (${createJobRes.status}): ${errorDetail}`);
   }
 
   const jobJson = await createJobRes.json();
@@ -51,6 +66,7 @@ export async function convertDocxToPdfWithCloudConvert(
   const uploadTask = tasks.find((t: any) => t.name === 'import-file' || t.operation === 'import/upload');
 
   if (!uploadTask || !uploadTask.result?.form) {
+    console.error('[CloudConvert Invalid Job Structure]:', JSON.stringify(jobJson, null, 2));
     throw new Error('Tidak dapat memperoleh Form Upload dari response CloudConvert.');
   }
 
@@ -76,8 +92,9 @@ export async function convertDocxToPdfWithCloudConvert(
 
   if (!uploadRes.ok) {
     const uploadErr = await uploadRes.text();
-    console.error('[CloudConvert] File upload failed:', uploadRes.status, uploadErr);
-    throw new Error(`Gagal mengunggah file docx ke CloudConvert (${uploadRes.status}): ${uploadErr}`);
+    console.error(`[CloudConvert API Error - Upload] Status Code: ${uploadRes.status}`);
+    console.error(`[CloudConvert Upload Response Body]:`, uploadErr);
+    throw new Error(`Gagal mengunggah file docx ke CloudConvert (Status ${uploadRes.status}): ${uploadErr}`);
   }
 
   // 3. Poll job status
@@ -97,15 +114,19 @@ export async function convertDocxToPdfWithCloudConvert(
       },
     });
 
-    if (!checkRes.ok) continue;
+    if (!checkRes.ok) {
+      const checkErr = await checkRes.text();
+      console.warn(`[CloudConvert Poll Status Warning] Status Code ${checkRes.status}:`, checkErr);
+      continue;
+    }
 
     const checkJson = await checkRes.json();
     status = checkJson.data?.status;
 
     if (status === 'error') {
+      console.error('[CloudConvert Job Detailed Errors]:', JSON.stringify(checkJson.data, null, 2));
       const failedTask = checkJson.data?.tasks?.find((t: any) => t.status === 'error');
-      const errorMsg = failedTask?.message || 'Proses konversi PDF di CloudConvert gagal.';
-      console.error('[CloudConvert] Job error:', errorMsg);
+      const errorMsg = failedTask?.message || failedTask?.code || 'Proses konversi PDF di CloudConvert gagal.';
       throw new Error(`Gagal Konversi PDF (CloudConvert): ${errorMsg}`);
     }
 
@@ -120,6 +141,7 @@ export async function convertDocxToPdfWithCloudConvert(
 
   const pdfUrl = exportTask.result?.files?.[0]?.url;
   if (!pdfUrl) {
+    console.error('[CloudConvert Missing PDF URL Task Result]:', JSON.stringify(exportTask, null, 2));
     throw new Error('URL file PDF dari CloudConvert tidak ditemukan.');
   }
 
@@ -127,7 +149,9 @@ export async function convertDocxToPdfWithCloudConvert(
   console.log('[CloudConvert] Mengunduh hasil PDF...');
   const pdfRes = await fetch(pdfUrl);
   if (!pdfRes.ok) {
-    throw new Error(`Gagal mengunduh file PDF hasil konversi CloudConvert (${pdfRes.statusText})`);
+    const downloadErr = await pdfRes.text();
+    console.error(`[CloudConvert API Error - Download PDF] Status Code: ${pdfRes.status}`, downloadErr);
+    throw new Error(`Gagal mengunggah/mengunduh file PDF hasil konversi (Status ${pdfRes.status})`);
   }
 
   const pdfArrayBuffer = await pdfRes.arrayBuffer();

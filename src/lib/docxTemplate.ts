@@ -327,9 +327,6 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
 
   const baseFileName = `Invoice_${storeName.replace(/\s+/g, '_')}_${kitchenName.replace(/\s+/g, '_')}_${rawDate}`;
 
-  // Download filled DOCX file
-  saveAs(docxBlob, `${baseFileName}.docx`);
-
   // 4. Convert filled DOCX file to PDF via backend CloudConvert proxy endpoint (/api/convert-to-pdf)
   try {
     const arrayBufferDocx = await docxBlob.arrayBuffer();
@@ -365,7 +362,7 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
     saveAs(pdfBlob, `${baseFileName}.pdf`);
   } catch (pdfErr: any) {
     console.error('Konversi PDF via CloudConvert API gagal:', pdfErr);
-    throw new Error(`File DOCX terisi berhasil didownload (${baseFileName}.docx), namun konversi PDF via CloudConvert gagal:\n${pdfErr?.message || pdfErr}`);
+    throw new Error(`Gagal mengonversi & mengunduh PDF via CloudConvert:\n${pdfErr?.message || pdfErr}`);
   }
 }
 
