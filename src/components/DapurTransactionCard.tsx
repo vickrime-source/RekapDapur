@@ -10,7 +10,7 @@ import {
   Printer
 } from 'lucide-react';
 import { OrderItem } from '../types';
-import { formatRupiah, formatTanggalDisatuin } from '../lib/formatters';
+import { formatRupiah, formatTanggalDisatuin, parseIndonesianNumber } from '../lib/formatters';
 import { motion } from 'motion/react';
 
 interface DapurTransactionCardProps {
@@ -23,6 +23,7 @@ interface DapurTransactionCardProps {
   onDeleteOrder: (id: string) => void;
   onDeleteKitchenOrders: (storeName: string, date: string) => void;
   onOpenInvoiceModal: (items: OrderItem[], kitchenName?: string, storeName?: string) => void;
+  onExportInvoicePdf?: (items: OrderItem[], kitchenName: string, storeName: string, dateStr?: string) => void;
   onAddItemToKitchen: (storeName: string) => void;
 }
 
@@ -35,11 +36,12 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
   onDeleteOrder,
   onDeleteKitchenOrders,
   onOpenInvoiceModal,
+  onExportInvoicePdf,
   onAddItemToKitchen,
 }) => {
   // Calculate Totals for this Store
-  const totalJual = items.reduce((sum, item) => sum + item.qty * item.hargaJual, 0);
-  const totalBeli = items.reduce((sum, item) => sum + item.qty * item.hargaBeli, 0);
+  const totalJual = items.reduce((sum, item) => sum + parseIndonesianNumber(item.qty) * parseIndonesianNumber(item.hargaJual), 0);
+  const totalBeli = items.reduce((sum, item) => sum + parseIndonesianNumber(item.qty) * parseIndonesianNumber(item.hargaBeli), 0);
   const totalProfit = totalJual - totalBeli;
 
   // Determine Overall Status for this Store
@@ -136,8 +138,11 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100 font-medium">
             {items.map((item) => {
-              const itemTotalJual = item.qty * item.hargaJual;
-              const itemTotalBeli = item.qty * item.hargaBeli;
+              const q = parseIndonesianNumber(item.qty);
+              const hj = parseIndonesianNumber(item.hargaJual);
+              const hb = parseIndonesianNumber(item.hargaBeli);
+              const itemTotalJual = q * hj;
+              const itemTotalBeli = q * hb;
 
               return (
                 <tr key={item.id} className="hover:bg-white/80 transition-colors">
@@ -213,14 +218,18 @@ export const DapurTransactionCard: React.FC<DapurTransactionCardProps> = ({
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
-                      {/* IKON CETAK (Highlighted in Yellow per Lampiran 1) */}
+                      {/* IKON CETAK (Export PDF Invoice) */}
                       <button
                         onClick={() => {
                           const kitchenItems = items.filter((it) => it.tujuanDapur === item.tujuanDapur);
-                          onOpenInvoiceModal(kitchenItems, item.tujuanDapur, storeName);
+                          if (onExportInvoicePdf) {
+                            onExportInvoicePdf(kitchenItems, item.tujuanDapur, storeName, item.tanggal);
+                          } else {
+                            onOpenInvoiceModal(kitchenItems, item.tujuanDapur, storeName);
+                          }
                         }}
-                        className="p-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold shadow-2xs transition-all active:scale-95 border border-amber-500/80"
-                        title="IKON CETAK: Print / Invoice Pesanan Dapur Ini"
+                        className="p-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold shadow-2xs transition-all active:scale-95 border border-amber-500/80 cursor-pointer"
+                        title="IKON CETAK: Export PDF Invoice Pesanan Dapur Ini"
                       >
                         <Printer className="w-3.5 h-3.5 stroke-[2.5]" />
                       </button>

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Printer, Receipt } from 'lucide-react';
+import { X, Printer, Receipt, FileText } from 'lucide-react';
 import { OrderItem } from '../types';
-import { formatRupiah, formatTanggalRealtime } from '../lib/formatters';
-import { downloadDocxInvoice } from '../lib/docxTemplate';
+import { formatRupiah, formatTanggalRealtime, parseIndonesianNumber } from '../lib/formatters';
+import { exportInvoicePdf, downloadDocxInvoice } from '../lib/docxTemplate';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface InvoiceModalProps {
@@ -25,6 +25,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   onSaveInvoiceRecord,
 }) => {
   const [bayar, setBayar] = useState<number>(0);
+  const [isExportingDocx, setIsExportingDocx] = useState(false);
 
   if (!isOpen || items.length === 0) return null;
 
@@ -43,8 +44,12 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   const displayItems = scopedItems.length > 0 ? scopedItems : items;
 
   const realTimeDate = formatTanggalRealtime();
-  const totalJual = displayItems.reduce((sum, item) => sum + item.qty * item.hargaJual, 0);
-  const sisa = totalJual - bayar;
+  const totalJual = displayItems.reduce((sum, item) => {
+    const q = parseIndonesianNumber(item.qty);
+    const p = parseIndonesianNumber(item.hargaJual || item.hargaBeli || 0);
+    return sum + q * p;
+  }, 0);
+  const sisa = totalJual - parseIndonesianNumber(bayar);
 
   const mainKitchen = tujuanDapur || displayItems[0]?.tujuanDapur || 'Singojuruh';
   const mainStore = toko || displayItems[0]?.toko || 'HTG';
@@ -53,20 +58,62 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     if (onSaveInvoiceRecord) {
       onSaveInvoiceRecord();
     }
-    // Automatically trigger print / save as PDF
     window.print();
   };
 
+  const handleDownloadDocx = async () => {
+    try {
+      setIsExportingDocx(true);
+      await downloadDocxInvoice({
+        storeName: mainStore,
+        kitchenName: mainKitchen,
+        items: displayItems,
+        invoiceNumber,
+        bayar,
+      });
+    } catch (err: any) {
+      console.error('Docx export error:', err);
+      alert(
+        `Gagal mengunduh template DOCX dari Supabase Storage:\n${err?.message || err}\n\n` +
+          `Pastikan file template (contoh: invoice_template_HTG.docx atau _invoice_template_LB.docx) sudah di-upload ke bucket "invoice" di Supabase Storage dan policy "Public Read" sudah diaktifkan.`
+      );
+    } finally {
+      setIsExportingDocx(false);
+    }
+  };
+
+  // Dynamic Store Branding Header Details
+  const normStore = mainStore.toUpperCase();
+  let companyName = `CV. HANDAI TOLAN GROUP — ${mainStore}`;
+  let companyAddress = (
+    <>
+      Jl. Krasak, RT.5/RW.1, Glowong,<br />
+      Wringin Agung, Kec. Gambiran<br />
+      Kab. Banyuwangi
+    </>
+  );
+
+  if (normStore.includes('LEMBUNG') || normStore.includes('LUWENG') || normStore.includes('BOGA') || normStore.includes('LB')) {
+    companyName = 'LUWENG BOGA';
+    companyAddress = <>Banyuwangi, Jawa Timur</>;
+  } else if (normStore.includes('LUMBUNG') || normStore.includes('ADIFRUTA') || normStore.includes('FRUITA') || normStore.includes('LA')) {
+    companyName = 'LUMBUNG ADIFRUTA';
+    companyAddress = <>Banyuwangi, Jawa Timur</>;
+  } else if (normStore.includes('PROHE') || normStore.includes('PW')) {
+    companyName = 'PROHE';
+    companyAddress = <>Banyuwangi, Jawa Timur</>;
+  }
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 backdrop-blur-xs no-print font-sans">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 backdrop-blur-xs printable-modal-overlay font-sans">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
           className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border border-slate-300"
         >
-          {/* Modal Top Control Bar (Lampiran 2: Only 1 Cetak PDF Button) */}
+          {/* Modal Top Control Bar */}
           <div className="px-6 py-3.5 bg-slate-900 text-white flex items-center justify-between gap-3 no-print border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Receipt className="w-5 h-5 text-indigo-400" />
@@ -78,12 +125,13 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               </div>
             </div>
 
-            {/* Action Buttons: "Cetak PDF" & "Download DOCX" + Close */}
+            {/* Action Buttons: "Export PDF" & Close */}
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={async () => {
                   try {
-                    await downloadDocxInvoice({
+                    setIsExportingDocx(true);
+                    await exportInvoicePdf({
                       storeName: mainStore,
                       kitchenName: mainKitchen,
                       items: displayItems,
@@ -91,28 +139,22 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                       bayar,
                     });
                   } catch (err: any) {
-                    alert(`Gagal download DOCX: ${err?.message || err}`);
+                    alert(`Gagal Export PDF:\n${err?.message || err}`);
+                  } finally {
+                    setIsExportingDocx(false);
                   }
                 }}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 no-print"
-                title="Unduh Invoice format DOCX (Template Custom)"
+                disabled={isExportingDocx}
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-slate-900 font-black text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+                title="Export Invoice ke PDF (Menggunakan Template Google Docs)"
               >
-                <Receipt className="w-4 h-4 text-emerald-400" />
-                <span className="hidden sm:inline">Export DOCX</span>
-                <span className="sm:hidden">DOCX</span>
-              </button>
-
-              <button
-                onClick={handlePrint}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-md transition-all active:scale-95 print-include"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Cetak PDF</span>
+                <Printer className="w-4 h-4 stroke-[2.5]" />
+                <span>{isExportingDocx ? 'Exporting PDF...' : 'Export PDF'}</span>
               </button>
 
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer"
                 title="Tutup Modal"
               >
                 <X className="w-5 h-5" />
@@ -120,7 +162,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
             </div>
           </div>
 
-          {/* Live Printable Invoice Document Body (Matching Supabase Document Layout) */}
+          {/* Live Printable Invoice Document Body */}
           <div className="p-8 sm:p-12 overflow-y-auto flex-1 printable-area bg-white text-slate-900 font-sans">
             {/* Kop Invoice Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start gap-6 pb-6 border-b border-slate-400">
@@ -140,12 +182,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
 
                 <div className="pt-2">
                   <h1 className="text-sm font-black text-slate-900 uppercase">
-                    CV. HANDAI TOLAN GROUP — {mainStore}
+                    {companyName}
                   </h1>
                   <p className="text-[11px] text-slate-700 leading-snug font-semibold max-w-xs">
-                    Jl. Krasak, RT.5/RW.1, Glowong,<br />
-                    Wringin Agung, Kec. Gambiran<br />
-                    Kab. banyuwangi
+                    {companyAddress}
                   </p>
                 </div>
               </div>
@@ -181,11 +221,13 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-900 text-slate-900 font-medium">
                   {displayItems.map((item, idx) => {
-                    const subtotalJual = item.qty * item.hargaJual;
+                    const q = parseIndonesianNumber(item.qty);
+                    const p = parseIndonesianNumber(item.hargaJual || item.hargaBeli || 0);
+                    const subtotalJual = q * p;
                     return (
                       <tr key={item.id} className="border-b border-slate-900">
                         <td className="py-2.5 px-3 border-r border-slate-900 text-center font-bold">{idx + 1}</td>
-                        <td className="py-2.5 px-3 border-r border-slate-900 text-center font-bold">{item.qty}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-900 text-center font-bold">{q}</td>
                         <td className="py-2.5 px-3 border-r border-slate-900 font-bold text-slate-900">
                           {item.namaBarang}
                           {item.catatan && (
@@ -195,7 +237,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                           )}
                         </td>
                         <td className="py-2.5 px-3 border-r border-slate-900 text-right font-semibold">
-                          {formatRupiah(item.hargaJual)}
+                          {formatRupiah(p)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-extrabold text-slate-900">
                           {formatRupiah(subtotalJual)}

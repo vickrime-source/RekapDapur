@@ -6,7 +6,7 @@ import {
   Clock
 } from 'lucide-react';
 import { OrderItem } from '../types';
-import { formatRupiah } from '../lib/formatters';
+import { formatRupiah, parseIndonesianNumber } from '../lib/formatters';
 
 interface HeaderBannerProps {
   orders: OrderItem[];
@@ -40,8 +40,8 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({
 
   // Dynamic calculations
   const totalOrders = filteredOrders.length;
-  const totalPenjualan = filteredOrders.reduce((sum, item) => sum + item.qty * item.hargaJual, 0);
-  const totalPembelian = filteredOrders.reduce((sum, item) => sum + item.qty * item.hargaBeli, 0);
+  const totalPenjualan = filteredOrders.reduce((sum, item) => sum + parseIndonesianNumber(item.qty) * parseIndonesianNumber(item.hargaJual), 0);
+  const totalPembelian = filteredOrders.reduce((sum, item) => sum + parseIndonesianNumber(item.qty) * parseIndonesianNumber(item.hargaBeli), 0);
   const totalProfit = totalPenjualan - totalPembelian;
   const totalPending = filteredOrders.filter((o) => o.status === 'pending').length;
 

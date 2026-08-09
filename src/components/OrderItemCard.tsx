@@ -11,7 +11,7 @@ import {
   Tag
 } from 'lucide-react';
 import { OrderItem } from '../types';
-import { formatRupiah } from '../lib/formatters';
+import { formatRupiah, parseIndonesianNumber } from '../lib/formatters';
 import { motion } from 'motion/react';
 
 interface OrderItemCardProps {
@@ -28,8 +28,11 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
   onDelete,
 }) => {
   const isDone = item.status === 'selesai';
-  const totalBeli = item.qty * item.hargaBeli;
-  const totalJual = item.qty * item.hargaJual;
+  const q = parseIndonesianNumber(item.qty);
+  const hb = parseIndonesianNumber(item.hargaBeli);
+  const hj = parseIndonesianNumber(item.hargaJual);
+  const totalBeli = q * hb;
+  const totalJual = q * hj;
   const profit = totalJual - totalBeli;
 
   return (

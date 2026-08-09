@@ -1,6 +1,33 @@
-export function formatRupiah(amount: number): string {
-  const isNegative = amount < 0;
-  const absAmount = Math.abs(amount);
+export function parseIndonesianNumber(value: number | string | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  
+  let str = String(value).trim();
+  if (!str) return 0;
+
+  // Clean currency prefixes and spaces
+  str = str.replace(/Rp\.?\s*/gi, '').trim();
+
+  // Handle dot vs comma in Indonesian format:
+  // "10.000" -> 10000
+  // "1.000.000" -> 1000000
+  // "1.500,50" -> 1500.50
+  if (str.includes('.') && str.includes(',')) {
+    str = str.replace(/\./g, '').replace(/,/g, '.');
+  } else if (str.includes('.')) {
+    str = str.replace(/\./g, '');
+  } else if (str.includes(',')) {
+    str = str.replace(/,/g, '.');
+  }
+
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+}
+
+export function formatRupiah(amount: number | string): string {
+  const numericAmount = typeof amount === 'number' ? amount : parseIndonesianNumber(amount);
+  const isNegative = numericAmount < 0;
+  const absAmount = Math.abs(numericAmount);
   const formatted = new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',

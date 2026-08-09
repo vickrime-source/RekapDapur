@@ -30,6 +30,7 @@ interface DashboardViewProps {
   onDeleteKitchenOrders: (kitchenName: string, date: string) => void;
   onOpenAddModal: (prefilledKitchen?: string) => void;
   onOpenInvoiceModal: (items: OrderItem[], kitchenName?: string, storeName?: string) => void;
+  onExportInvoicePdf?: (items: OrderItem[], kitchenName: string, storeName: string, dateStr?: string) => void;
   kitchens: Kitchen[];
   stores: StoreType[];
 }
@@ -45,6 +46,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onDeleteOrder,
   onOpenAddModal,
   onOpenInvoiceModal,
+  onExportInvoicePdf,
   kitchens,
   stores,
 }) => {
@@ -203,6 +205,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onDuplicateOrder={onDuplicateOrder}
         onDeleteOrder={onDeleteOrder}
         onOpenInvoiceModal={onOpenInvoiceModal}
+        onExportInvoicePdf={onExportInvoicePdf}
       />
 
       {/* Popover Calendar Modal (for optional date scope filtering) */}

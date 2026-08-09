@@ -178,34 +178,45 @@
 
 /* Print Stylesheet for Real-Time Invoice Printing */
 @media print {
-  /* Hide UI components during print */
+  /* Hide non-printable page elements during print */
   body {
-    background-color: #ffffff !important;
+    background: #ffffff !important;
     color: #000000 !important;
   }
 
-  .no-print, 
-  header, 
-  nav, 
-  .bottom-nav,
-  .fab-button,
-  .action-buttons,
-  .modal-overlay,
-  button:not(.print-include) {
+  body > *:not(.printable-modal-overlay) {
     display: none !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* Modal overlay reset for print */
+  .printable-modal-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #ffffff !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   /* Printable invoice area full screen */
   .printable-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: relative !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 20px !important;
+    padding: 24px !important;
     box-shadow: none !important;
     border: none !important;
     background: #ffffff !important;
+    overflow: visible !important;
   }
 
   .print-page-break {

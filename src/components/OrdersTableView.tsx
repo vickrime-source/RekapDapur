@@ -32,6 +32,7 @@ interface OrdersTableViewProps {
   onDuplicateOrder: (order: OrderItem) => void;
   onDeleteOrder: (id: string) => void;
   onOpenInvoiceModal: (items: OrderItem[], kitchenName: string, storeName: string) => void;
+  onExportInvoicePdf?: (items: OrderItem[], kitchenName: string, storeName: string, dateStr?: string) => void;
 }
 
 export const OrdersTableView: React.FC<OrdersTableViewProps> = ({
@@ -42,6 +43,7 @@ export const OrdersTableView: React.FC<OrdersTableViewProps> = ({
   onDuplicateOrder,
   onDeleteOrder,
   onOpenInvoiceModal,
+  onExportInvoicePdf,
 }) => {
   // Pagination State (Max 15 groups per page)
   const [currentPage, setCurrentPage] = useState(1);
@@ -361,13 +363,17 @@ export const OrdersTableView: React.FC<OrdersTableViewProps> = ({
                       >
                         <div className="flex items-center justify-center space-x-0.5">
                           <button
-                            onClick={() =>
-                              onOpenInvoiceModal(group.items, group.tujuanDapur, group.toko)
-                            }
-                            className="p-0.5 rounded text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition-colors"
-                            title="Cetak Invoice (Semua Pesanan di Dapur Ini)"
+                            onClick={() => {
+                              if (onExportInvoicePdf) {
+                                onExportInvoicePdf(group.items, group.tujuanDapur, group.toko, group.tanggal);
+                              } else {
+                                onOpenInvoiceModal(group.items, group.tujuanDapur, group.toko);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold shadow-2xs transition-all active:scale-95 border border-amber-500/80 cursor-pointer"
+                            title="Export Invoice PDF (Google Docs Template)"
                           >
-                            <Printer className="w-3.5 h-3.5" />
+                            <Printer className="w-3.5 h-3.5 stroke-[2.5]" />
                           </button>
 
                           <div className="relative" ref={activeMenuId === group.id ? menuRef : null}>
