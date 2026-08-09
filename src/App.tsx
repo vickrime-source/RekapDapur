@@ -29,7 +29,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { Toast, ToastMessage, ToastType } from './components/Toast';
 import { SplashScreen } from './components/SplashScreen';
 import { generateInvoiceNumber } from './lib/formatters';
-import { addRow, fetchSheetData, mapRawOrder, mapRawInvoice } from './lib/googleSheets';
+import { addRow, fetchSheetData, mapRawOrder, mapRawInvoice, buildPesananPayload, buildTransaksiPayload } from './lib/googleSheets';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -212,32 +212,7 @@ export default function App() {
     };
 
     setIsSyncingGas(true);
-    const res = await addRow('pesanan', {
-      NO: duplicated.id,
-      DAPUR: duplicated.tujuanDapur,
-      ITEM: duplicated.namaBarang,
-      DATE: duplicated.tanggal,
-      QTY: duplicated.qty,
-      TOKO: duplicated.toko,
-      PAYMENT: duplicated.paymentStatus || (duplicated.status === 'selesai' ? 'PAID' : 'UNPAID'),
-      DILEVERY: duplicated.deliveryStatus || (duplicated.status === 'selesai' ? 'DONE' : 'PENDING'),
-      'H. JUAL': duplicated.hargaJual,
-      'H. BELI': duplicated.hargaBeli,
-      id: duplicated.id,
-      tanggal: duplicated.tanggal,
-      toko: duplicated.toko,
-      tujuanDapur: duplicated.tujuanDapur,
-      pemasok: duplicated.pemasok,
-      namaBarang: duplicated.namaBarang,
-      qty: duplicated.qty,
-      hargaBeli: duplicated.hargaBeli,
-      hargaJual: duplicated.hargaJual,
-      status: duplicated.status,
-      paymentStatus: duplicated.paymentStatus || 'UNPAID',
-      deliveryStatus: duplicated.deliveryStatus || 'PENDING',
-      catatan: duplicated.catatan || '',
-      createdAt: duplicated.createdAt,
-    });
+    const res = await addRow('pesanan', buildPesananPayload(duplicated));
     setIsSyncingGas(false);
 
     if (res.success) {
@@ -286,32 +261,7 @@ export default function App() {
         createdAt: createdDate,
       };
 
-      const res = await addRow('pesanan', {
-        NO: newOrderItem.id,
-        DAPUR: newOrderItem.tujuanDapur,
-        ITEM: newOrderItem.namaBarang,
-        DATE: newOrderItem.tanggal,
-        QTY: newOrderItem.qty,
-        TOKO: newOrderItem.toko,
-        PAYMENT: newOrderItem.paymentStatus || (newOrderItem.status === 'selesai' ? 'PAID' : 'UNPAID'),
-        DILEVERY: newOrderItem.deliveryStatus || (newOrderItem.status === 'selesai' ? 'DONE' : 'PENDING'),
-        'H. JUAL': newOrderItem.hargaJual,
-        'H. BELI': newOrderItem.hargaBeli,
-        id: newOrderItem.id,
-        tanggal: newOrderItem.tanggal,
-        toko: newOrderItem.toko,
-        tujuanDapur: newOrderItem.tujuanDapur,
-        pemasok: newOrderItem.pemasok,
-        namaBarang: newOrderItem.namaBarang,
-        qty: newOrderItem.qty,
-        hargaBeli: newOrderItem.hargaBeli,
-        hargaJual: newOrderItem.hargaJual,
-        status: newOrderItem.status,
-        paymentStatus: newOrderItem.paymentStatus || (newOrderItem.status === 'selesai' ? 'PAID' : 'UNPAID'),
-        deliveryStatus: newOrderItem.deliveryStatus || (newOrderItem.status === 'selesai' ? 'DONE' : 'PENDING'),
-        catatan: newOrderItem.catatan || '',
-        createdAt: newOrderItem.createdAt,
-      });
+      const res = await addRow('pesanan', buildPesananPayload(newOrderItem));
 
       if (res.success) {
         successCount++;
@@ -459,29 +409,7 @@ export default function App() {
 
     setIsSyncingGas(true);
     // POST payload to sheet "transaksi"
-    const txData = {
-      NO: newRecord.invoiceNumber,
-      TANGGAL: newRecord.tanggalPrint,
-      PEMASOK: newRecord.items[0]?.pemasok || 'Pemasok 1',
-      BARANG: newRecord.items.map((i) => `${i.namaBarang} (${i.qty})`).join(', '),
-      TOKO: newRecord.toko,
-      QTY: newRecord.items.reduce((sum, item) => sum + item.qty, 0),
-      'H. BELI': newRecord.totalBeli,
-      TOTAL: newRecord.totalJual,
-      STATUS: 'LUNAS',
-      id: newRecord.id,
-      invoiceNumber: newRecord.invoiceNumber,
-      tanggalPrint: newRecord.tanggalPrint,
-      createdAt: newRecord.createdAt,
-      tujuanDapur: newRecord.tujuanDapur,
-      toko: newRecord.toko,
-      totalBeli: newRecord.totalBeli,
-      totalJual: newRecord.totalJual,
-      totalProfit: newRecord.totalProfit,
-      itemsCount: newRecord.items.length,
-      itemsSummary: newRecord.items.map((i) => `${i.namaBarang} (${i.qty})`).join(', '),
-      items: JSON.stringify(newRecord.items),
-    };
+    const txData = buildTransaksiPayload(newRecord);
 
     const res = await addRow('transaksi', txData);
     setIsSyncingGas(false);
@@ -537,32 +465,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
 
-      const saveRes = await addRow('pesanan', {
-        NO: newOrderItem.id,
-        DAPUR: newOrderItem.tujuanDapur,
-        ITEM: newOrderItem.namaBarang,
-        DATE: newOrderItem.tanggal,
-        QTY: newOrderItem.qty,
-        TOKO: newOrderItem.toko,
-        PAYMENT: 'UNPAID',
-        DILEVERY: 'PENDING',
-        'H. JUAL': newOrderItem.hargaJual,
-        'H. BELI': newOrderItem.hargaBeli,
-        id: newOrderItem.id,
-        tanggal: newOrderItem.tanggal,
-        toko: newOrderItem.toko,
-        tujuanDapur: newOrderItem.tujuanDapur,
-        pemasok: newOrderItem.pemasok,
-        namaBarang: newOrderItem.namaBarang,
-        qty: newOrderItem.qty,
-        hargaBeli: newOrderItem.hargaBeli,
-        hargaJual: newOrderItem.hargaJual,
-        status: newOrderItem.status,
-        paymentStatus: 'UNPAID',
-        deliveryStatus: 'PENDING',
-        catatan: '',
-        createdAt: newOrderItem.createdAt,
-      });
+      const saveRes = await addRow('pesanan', buildPesananPayload(newOrderItem));
 
       if (saveRes.success) {
         successCount++;

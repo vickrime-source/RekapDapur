@@ -92,6 +92,65 @@ export async function addRow(
 }
 
 /**
+ * Builder helper untuk membuat payload "data" sheet "pesanan"
+ * yang PERSIS SAMA dengan header sheet:
+ * DAPUR, ITEM, DATE, QTY, TOKO, PAYMENT, DILEVERY, H. JUAL, H. BELI
+ */
+export function buildPesananPayload(item: Partial<OrderItem> & {
+  tujuanDapur?: string;
+  namaBarang?: string;
+  tanggal?: string;
+  qty?: number;
+  toko?: string;
+  paymentStatus?: string;
+  deliveryStatus?: string;
+  status?: string;
+  hargaJual?: number;
+  hargaBeli?: number;
+}) {
+  return {
+    DAPUR: item.tujuanDapur || '',
+    ITEM: item.namaBarang || '',
+    DATE: item.tanggal || '',
+    QTY: Number(item.qty) || 0,
+    TOKO: item.toko || '',
+    PAYMENT: item.paymentStatus || (item.status === 'selesai' ? 'PAID' : 'UNPAID'),
+    DILEVERY: item.deliveryStatus || (item.status === 'selesai' ? 'DONE' : 'PENDING'),
+    'H. JUAL': Number(item.hargaJual) || 0,
+    'H. BELI': Number(item.hargaBeli) || 0,
+  };
+}
+
+/**
+ * Builder helper untuk membuat payload "data" sheet "transaksi"
+ * yang PERSIS SAMA dengan header sheet:
+ * TANGGAL, PEMASOK, BARANG, TOKO, QTY, H. BELI, TOTAL, STATUS
+ */
+export function buildTransaksiPayload(invoice: {
+  tanggalPrint?: string;
+  toko?: string;
+  totalBeli?: number;
+  totalJual?: number;
+  items?: OrderItem[];
+}) {
+  const items = invoice.items || [];
+  const totalQty = items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
+  const barangSummary = items.map((i) => `${i.namaBarang} (${i.qty})`).join(', ');
+  const pemasokName = items[0]?.pemasok || 'Pemasok 1';
+
+  return {
+    TANGGAL: invoice.tanggalPrint || '',
+    PEMASOK: pemasokName,
+    BARANG: barangSummary,
+    TOKO: invoice.toko || '',
+    QTY: totalQty,
+    'H. BELI': Number(invoice.totalBeli) || 0,
+    TOTAL: Number(invoice.totalJual) || 0,
+    STATUS: 'LUNAS',
+  };
+}
+
+/**
  * Mapper helper untuk baris raw dari Sheet Pesanan ke TypeScript OrderItem
  */
 export function mapRawOrder(row: any): OrderItem {

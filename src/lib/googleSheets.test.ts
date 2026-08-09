@@ -1,10 +1,78 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mapRawOrder, mapRawInvoice, addRow, GAS_TOKEN, GAS_BASE_URL } from './googleSheets';
+import { mapRawOrder, mapRawInvoice, addRow, buildPesananPayload, buildTransaksiPayload, GAS_TOKEN, GAS_BASE_URL } from './googleSheets';
 
 describe('Google Sheets Integration Tests (TDD)', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  describe('Payload Builders (Exact Google Sheet Header Matching)', () => {
+    it('buildPesananPayload should create data object with exact headers for sheet "pesanan"', () => {
+      const orderItem = {
+        id: 'ord-12345',
+        tujuanDapur: 'Dapur Utama',
+        namaBarang: 'Beli Cabai Rawit',
+        tanggal: '2026-08-09',
+        qty: 15,
+        toko: 'HTG',
+        paymentStatus: 'UNPAID' as const,
+        deliveryStatus: 'PENDING' as const,
+        hargaJual: 45000,
+        hargaBeli: 40000,
+        createdAt: '2026-08-09T10:00:00.000Z',
+      };
+
+      const payload = buildPesananPayload(orderItem);
+
+      expect(payload).toEqual({
+        DAPUR: 'Dapur Utama',
+        ITEM: 'Beli Cabai Rawit',
+        DATE: '2026-08-09',
+        QTY: 15,
+        TOKO: 'HTG',
+        PAYMENT: 'UNPAID',
+        DILEVERY: 'PENDING',
+        'H. JUAL': 45000,
+        'H. BELI': 40000,
+      });
+
+      // Verify internal fields are strictly omitted
+      expect((payload as any).id).toBeUndefined();
+      expect((payload as any).tanggal).toBeUndefined();
+      expect((payload as any).namaBarang).toBeUndefined();
+    });
+
+    it('buildTransaksiPayload should create data object with exact headers for sheet "transaksi"', () => {
+      const invoiceData = {
+        tanggalPrint: '2026-08-09',
+        toko: 'Toko Bintang',
+        totalBeli: 150000,
+        totalJual: 180000,
+        items: [
+          { namaBarang: 'Bawang Merah', qty: 10, pemasok: 'Pemasok Subur' } as any,
+          { namaBarang: 'Bawang Putih', qty: 5, pemasok: 'Pemasok Subur' } as any,
+        ],
+      };
+
+      const payload = buildTransaksiPayload(invoiceData);
+
+      expect(payload).toEqual({
+        TANGGAL: '2026-08-09',
+        PEMASOK: 'Pemasok Subur',
+        BARANG: 'Bawang Merah (10), Bawang Putih (5)',
+        TOKO: 'Toko Bintang',
+        QTY: 15,
+        'H. BELI': 150000,
+        TOTAL: 180000,
+        STATUS: 'LUNAS',
+      });
+
+      // Verify internal fields are strictly omitted
+      expect((payload as any).id).toBeUndefined();
+      expect((payload as any).invoiceNumber).toBeUndefined();
+      expect((payload as any).items).toBeUndefined();
+    });
   });
 
   describe('mapRawOrder', () => {
