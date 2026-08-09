@@ -290,22 +290,39 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
 
   // 3. Process docx with Docxtemplater
   const zip = new PizZip(arrayBuffer);
-  const doc = new Docxtemplater(zip, {
-    paragraphLoop: true,
-    linebreaks: true,
-    nullGetter: () => '',
-  });
-
   let docxBlob: Blob;
+
   try {
+    // Primary: double curly braces {{tag}} as used in template
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      delimiters: { start: '{{', end: '}}' },
+      nullGetter: () => '',
+    });
     doc.render(dataContext);
     docxBlob = doc.getZip().generate({
       type: 'blob',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
-  } catch (err: any) {
-    const errorDetails = formatDocxtemplaterErrors(err, storeName);
-    throw new Error(errorDetails);
+  } catch (errDouble: any) {
+    console.warn(`Docxtemplater failed with {{ delimiters }}, trying { delimiters } fallback...`, errDouble);
+    try {
+      const zip2 = new PizZip(arrayBuffer);
+      const doc2 = new Docxtemplater(zip2, {
+        paragraphLoop: true,
+        linebreaks: true,
+        nullGetter: () => '',
+      });
+      doc2.render(dataContext);
+      docxBlob = doc2.getZip().generate({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+    } catch (errSingle: any) {
+      const errorDetails = formatDocxtemplaterErrors(errDouble, storeName);
+      throw new Error(errorDetails);
+    }
   }
 
   const baseFileName = `Invoice_${storeName.replace(/\s+/g, '_')}_${kitchenName.replace(/\s+/g, '_')}_${rawDate}`;
