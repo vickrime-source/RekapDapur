@@ -1,8 +1,16 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { convertDocxToPdfWithCloudConvert } from './src/lib/cloudConvert';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 const TEMPLATE_URLS: Record<string, string> = {
   "LUWENG BOGA": "https://docs.google.com/document/d/1GoLCYZnsf27NMaNYAiDbkgbVavGS4eGu/export?format=docx",
@@ -66,20 +74,44 @@ async function startServer() {
     }
   });
 
-  // Convert DOCX to PDF using CloudConvert API
-  app.post('/api/convert-to-pdf', async (req, res) => {
+  // Convert DOCX to PDF using CloudConvert API (Supports multipart/form-data, raw binary, and JSON)
+  app.post('/api/convert-to-pdf', (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({
+            error: `Ukuran file DOCX terlalu besar. Batas maksimum platform adalah 4.50 MB. Harap kompres logo/gambar pada template Google Docs Anda.`,
+          });
+        }
+        return res.status(400).json({ error: `Gagal membaca file upload multipart: ${err.message}` });
+      }
+      next();
+    });
+  }, async (req, res) => {
     try {
       let docxBuffer: Buffer | null = null;
       let downloadName = 'Invoice.pdf';
       let customApiKey = '';
 
-      if (Buffer.isBuffer(req.body) && req.body.length > 0) {
-        docxBuffer = req.body;
-        if (req.query.fileName) {
-          downloadName = decodeURIComponent(req.query.fileName as string);
+      // 1. Check if uploaded as multipart/form-data (req.file)
+      if (req.file && req.file.buffer && req.file.buffer.length > 0) {
+        docxBuffer = req.file.buffer;
+        if (req.body?.fileName) {
+          downloadName = req.body.fileName;
+        } else if (req.file.originalname) {
+          downloadName = req.file.originalname.replace(/\.docx$/i, '.pdf');
         }
-      } else {
-        const { docxBase64, apiKey, fileName } = req.body || {};
+        if (req.body?.apiKey) {
+          customApiKey = req.body.apiKey;
+        }
+      }
+      // 2. Fallback: Raw binary octet-stream
+      else if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+        docxBuffer = req.body;
+      }
+      // 3. Fallback: Base64 JSON payload
+      else if (req.body && typeof req.body === 'object') {
+        const { docxBase64, apiKey, fileName } = req.body;
         if (docxBase64) {
           docxBuffer = Buffer.from(docxBase64, 'base64');
         }
@@ -87,8 +119,27 @@ async function startServer() {
         if (apiKey) customApiKey = apiKey;
       }
 
+      if (req.query.fileName) {
+        downloadName = decodeURIComponent(req.query.fileName as string);
+      }
+      if (req.query.apiKey) {
+        customApiKey = decodeURIComponent(req.query.apiKey as string);
+      }
+
       if (!docxBuffer || docxBuffer.length === 0) {
         return res.status(400).json({ error: 'Data file DOCX tidak ditemukan dalam request.' });
+      }
+
+      const fileSizeMB = (docxBuffer.length / (1024 * 1024)).toFixed(2);
+      console.log(`[Server API /api/convert-to-pdf] Terima file DOCX (${docxBuffer.length} bytes / ${fileSizeMB} MB)`);
+
+      // 4. Check payload size limit (Vercel serverless / platform function payload limit is 4.5 MB)
+      const MAX_PAYLOAD_BYTES = 4.5 * 1024 * 1024;
+      if (docxBuffer.length > MAX_PAYLOAD_BYTES) {
+        console.warn(`[Server API /api/convert-to-pdf] Payload size (${fileSizeMB} MB) exceeds maximum limit (4.50 MB)`);
+        return res.status(413).json({
+          error: `Ukuran file DOCX (${fileSizeMB} MB) melebihi batas maksimum platform (4.50 MB). Harap kompres logo/gambar pada template Google Docs Anda sebesarnya agar ukuran file berada di bawah 4.5 MB.`,
+        });
       }
 
       const apiKey = (process.env.CLOUDCONVERT_API_KEY || customApiKey || '').trim();
@@ -99,7 +150,7 @@ async function startServer() {
         });
       }
 
-      console.log(`[Server API] Converting DOCX (${docxBuffer.length} bytes) to PDF via CloudConvert API...`);
+      console.log(`[Server API] Converting DOCX (${fileSizeMB} MB) to PDF via CloudConvert API...`);
       const pdfBuffer = await convertDocxToPdfWithCloudConvert(docxBuffer, apiKey);
 
       res.setHeader('Content-Type', 'application/pdf');

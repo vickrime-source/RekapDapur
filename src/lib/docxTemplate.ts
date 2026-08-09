@@ -335,6 +335,17 @@ export async function exportInvoicePdf(
 
   // 4. Convert filled DOCX file to PDF via backend CloudConvert proxy endpoint (/api/convert-to-pdf)
   const arrayBufferDocx = await docxBlob.arrayBuffer();
+  const docxSizeBytes = arrayBufferDocx.byteLength;
+  const docxSizeMB = (docxSizeBytes / (1024 * 1024)).toFixed(2);
+
+  console.log(`[Client PDF Export] Preparing DOCX (${docxSizeBytes} bytes / ${docxSizeMB} MB) for multipart/form-data upload`);
+
+  // Pre-flight client check: If size exceeds platform limit (4.5MB), notify user directly with size details
+  if (docxSizeBytes > 4.5 * 1024 * 1024) {
+    throw new Error(
+      `Ukuran file template DOCX (${docxSizeMB} MB) melebihi batas maksimum pengiriman platform (4.50 MB). Harap kompres logo/gambar pada template Google Docs Anda sebesarnya agar ukuran file berada di bawah 4.5 MB.`
+    );
+  }
 
   let convertResponse: Response | null = null;
   let attempt = 0;
@@ -350,15 +361,19 @@ export async function exportInvoicePdf(
         onProgress?.('Mengonversi ke PDF via CloudConvert...');
       }
 
+      const formData = new FormData();
+      const docxFile = new File([arrayBufferDocx], `${baseFileName}.docx`, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      formData.append('file', docxFile);
+      formData.append('fileName', `${baseFileName}.pdf`);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for mobile networks
 
-      convertResponse = await fetch(`/api/convert-to-pdf?fileName=${encodeURIComponent(`${baseFileName}.pdf`)}`, {
+      convertResponse = await fetch('/api/convert-to-pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-        },
-        body: arrayBufferDocx,
+        body: formData,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
