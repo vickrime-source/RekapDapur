@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { convertDocxToPdfWithCloudConvert } from './src/lib/cloudConvert';
 
 const TEMPLATE_URLS: Record<string, string> = {
   "LUWENG BOGA": "https://docs.google.com/document/d/1GoLCYZnsf27NMaNYAiDbkgbVavGS4eGu/export?format=docx",
@@ -26,6 +27,9 @@ function getGoogleDocTemplateUrl(storeName: string): string {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Middleware for parsing large JSON payloads (base64 docx)
+  app.use(express.json({ limit: '50mb' }));
 
   // Proxy endpoint to fetch Google Docs export link as binary docx
   app.get('/api/fetch-template', async (req, res) => {
@@ -56,6 +60,38 @@ async function startServer() {
     } catch (err: any) {
       console.error('[Proxy Server Error]:', err);
       res.status(500).json({ error: err?.message || 'Server error proxying Google Docs template' });
+    }
+  });
+
+  // Convert DOCX to PDF using CloudConvert API
+  app.post('/api/convert-to-pdf', async (req, res) => {
+    try {
+      const { docxBase64, apiKey: customApiKey, fileName } = req.body || {};
+
+      if (!docxBase64) {
+        return res.status(400).json({ error: 'Parameter docxBase64 wajib diisi.' });
+      }
+
+      const apiKey = customApiKey || process.env.CLOUDCONVERT_API_KEY || '';
+      if (!apiKey) {
+        return res.status(400).json({
+          error: 'CLOUDCONVERT_API_KEY tidak dikonfigurasi di environment server. Harap set CLOUDCONVERT_API_KEY.',
+        });
+      }
+
+      console.log('[Server API] Converting DOCX to PDF via CloudConvert API...');
+      const docxBuffer = Buffer.from(docxBase64, 'base64');
+      const pdfBuffer = await convertDocxToPdfWithCloudConvert(docxBuffer, apiKey);
+
+      const downloadName = fileName || 'Invoice.pdf';
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+      return res.status(200).send(pdfBuffer);
+    } catch (err: any) {
+      console.error('[Convert PDF Server Error]:', err);
+      return res.status(500).json({
+        error: err?.message || 'Gagal melakukan konversi PDF via CloudConvert',
+      });
     }
   });
 

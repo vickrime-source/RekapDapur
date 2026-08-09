@@ -330,39 +330,42 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
   // Download filled DOCX file
   saveAs(docxBlob, `${baseFileName}.docx`);
 
-  // 4. Render filled DOCX into DOM using docx-preview, then convert to PDF using html2pdf.js
-  const pdfContainer = document.createElement('div');
-  pdfContainer.style.position = 'absolute';
-  pdfContainer.style.left = '-9999px';
-  pdfContainer.style.top = '-9999px';
-  pdfContainer.style.width = '800px';
-  pdfContainer.style.backgroundColor = '#ffffff';
-  pdfContainer.style.padding = '20px';
-  document.body.appendChild(pdfContainer);
-
+  // 4. Convert filled DOCX file to PDF via backend CloudConvert proxy endpoint (/api/convert-to-pdf)
   try {
-    await renderAsync(docxBlob, pdfContainer, undefined, {
-      inWrapper: false,
-      ignoreWidth: false,
-      ignoreHeight: false,
+    const arrayBufferDocx = await docxBlob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBufferDocx);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+    }
+    const docxBase64 = btoa(binary);
+
+    const convertResponse = await fetch('/api/convert-to-pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        docxBase64,
+        fileName: `${baseFileName}.pdf`,
+      }),
     });
 
-    const pdfOptions = {
-      margin: 6,
-      filename: `${baseFileName}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-    };
-
-    await html2pdf().set(pdfOptions).from(pdfContainer).save();
-  } catch (pdfErr: any) {
-    console.error('Konversi PDF dari DOCX gagal:', pdfErr);
-    throw new Error(`File DOCX berhasil didownload (${baseFileName}.docx), namun konversi PDF gagal:\n${pdfErr?.message || pdfErr}`);
-  } finally {
-    if (document.body.contains(pdfContainer)) {
-      document.body.removeChild(pdfContainer);
+    if (!convertResponse.ok) {
+      let errorMsg = 'Gagal konversi PDF, coba lagi.';
+      try {
+        const errJson = await convertResponse.json();
+        if (errJson.error) errorMsg = errJson.error;
+      } catch (_) {}
+      throw new Error(errorMsg);
     }
+
+    const pdfBlob = await convertResponse.blob();
+    saveAs(pdfBlob, `${baseFileName}.pdf`);
+  } catch (pdfErr: any) {
+    console.error('Konversi PDF via CloudConvert API gagal:', pdfErr);
+    throw new Error(`File DOCX terisi berhasil didownload (${baseFileName}.docx), namun konversi PDF via CloudConvert gagal:\n${pdfErr?.message || pdfErr}`);
   }
 }
 
