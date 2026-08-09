@@ -29,8 +29,10 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Middleware for parsing large JSON payloads (base64 docx)
-  app.use(express.json({ limit: '50mb' }));
+  // Middleware for parsing large payloads
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+  app.use(express.raw({ type: ['application/octet-stream', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], limit: '100mb' }));
 
   // Proxy endpoint to fetch Google Docs export link as binary docx
   app.get('/api/fetch-template', async (req, res) => {
@@ -67,10 +69,26 @@ async function startServer() {
   // Convert DOCX to PDF using CloudConvert API
   app.post('/api/convert-to-pdf', async (req, res) => {
     try {
-      const { docxBase64, apiKey: customApiKey, fileName } = req.body || {};
+      let docxBuffer: Buffer | null = null;
+      let downloadName = 'Invoice.pdf';
+      let customApiKey = '';
 
-      if (!docxBase64) {
-        return res.status(400).json({ error: 'Parameter docxBase64 wajib diisi.' });
+      if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+        docxBuffer = req.body;
+        if (req.query.fileName) {
+          downloadName = decodeURIComponent(req.query.fileName as string);
+        }
+      } else {
+        const { docxBase64, apiKey, fileName } = req.body || {};
+        if (docxBase64) {
+          docxBuffer = Buffer.from(docxBase64, 'base64');
+        }
+        if (fileName) downloadName = fileName;
+        if (apiKey) customApiKey = apiKey;
+      }
+
+      if (!docxBuffer || docxBuffer.length === 0) {
+        return res.status(400).json({ error: 'Data file DOCX tidak ditemukan dalam request.' });
       }
 
       const apiKey = (process.env.CLOUDCONVERT_API_KEY || customApiKey || '').trim();
@@ -81,11 +99,9 @@ async function startServer() {
         });
       }
 
-      console.log('[Server API] Converting DOCX to PDF via CloudConvert API...');
-      const docxBuffer = Buffer.from(docxBase64, 'base64');
+      console.log(`[Server API] Converting DOCX (${docxBuffer.length} bytes) to PDF via CloudConvert API...`);
       const pdfBuffer = await convertDocxToPdfWithCloudConvert(docxBuffer, apiKey);
 
-      const downloadName = fileName || 'Invoice.pdf';
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
       return res.status(200).send(pdfBuffer);

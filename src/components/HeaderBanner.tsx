@@ -3,7 +3,8 @@ import {
   Settings, 
   ShoppingBag, 
   TrendingUp, 
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { OrderItem } from '../types';
 import { formatRupiah, parseIndonesianNumber } from '../lib/formatters';
@@ -14,12 +15,16 @@ interface HeaderBannerProps {
   onOpenSettings: () => void;
   onOpenTextImport?: () => void;
   onOpenExport?: () => void;
+  onRefreshGas?: () => void;
+  isSyncingGas?: boolean;
 }
 
 export const HeaderBanner: React.FC<HeaderBannerProps> = ({
   orders = [],
   selectedDate,
   onOpenSettings,
+  onRefreshGas,
+  isSyncingGas = false,
 }) => {
   const [period, setPeriod] = useState<'hari_ini' | 'bulan_ini' | 'all_time'>('hari_ini');
 
@@ -69,15 +74,28 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({
               </div>
             </div>
 
-            {/* Mobile Settings Button */}
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              title="Pengaturan Master Data"
-              className="sm:hidden clay-btn p-2 rounded-2xl text-slate-700 hover:text-indigo-600 flex-shrink-0 cursor-pointer border border-slate-200"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+            {/* Mobile Refresh & Settings Buttons */}
+            <div className="sm:hidden flex items-center gap-1">
+              {onRefreshGas && (
+                <button
+                  type="button"
+                  onClick={onRefreshGas}
+                  disabled={isSyncingGas}
+                  title="Sinkronkan data dari Google Sheets"
+                  className="clay-btn p-2 rounded-2xl text-indigo-600 hover:text-indigo-800 flex-shrink-0 cursor-pointer border border-slate-200"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncingGas ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                title="Pengaturan Master Data"
+                className="clay-btn p-2 rounded-2xl text-slate-700 hover:text-indigo-600 flex-shrink-0 cursor-pointer border border-slate-200"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Right Section: Filter Switcher & Desktop Settings */}
@@ -119,15 +137,29 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({
               </button>
             </div>
 
-            {/* Desktop Settings Button */}
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              title="Pengaturan Master Data"
-              className="hidden sm:flex clay-btn p-2 rounded-2xl text-slate-700 hover:text-indigo-600 flex-shrink-0 cursor-pointer border border-slate-200/80"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+            {/* Desktop Refresh & Settings Buttons */}
+            <div className="hidden sm:flex items-center gap-1.5">
+              {onRefreshGas && (
+                <button
+                  type="button"
+                  onClick={onRefreshGas}
+                  disabled={isSyncingGas}
+                  title="Sinkronkan data dari Google Sheets"
+                  className="clay-btn px-3 py-2 rounded-2xl text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 font-bold text-xs flex-shrink-0 cursor-pointer border border-slate-200/80"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGas ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingGas ? 'Syncing...' : 'Sync Sheet'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                title="Pengaturan Master Data"
+                className="clay-btn p-2 rounded-2xl text-slate-700 hover:text-indigo-600 flex-shrink-0 cursor-pointer border border-slate-200/80"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 

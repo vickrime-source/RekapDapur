@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, Receipt, FileText, User, MapPin, Phone, CreditCard } from 'lucide-react';
+import { X, Printer, Receipt, FileText, User, MapPin, Phone, CreditCard, Loader2, Download, CheckCircle2 } from 'lucide-react';
 import { OrderItem } from '../types';
 import { formatRupiah, formatTanggalRealtime, parseIndonesianNumber } from '../lib/formatters';
 import { exportInvoicePdf } from '../lib/docxTemplate';
@@ -34,10 +34,14 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
 }) => {
   const [bayar, setBayar] = useState<number>(bayarAmount);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
+  const [exportStatusMsg, setExportStatusMsg] = useState('');
+  const [pdfResult, setPdfResult] = useState<{ url: string; fileName: string } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setBayar(bayarAmount);
+      setExportStatusMsg('');
+      setPdfResult(null);
     }
   }, [isOpen, bayarAmount]);
 
@@ -69,26 +73,107 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   const mainStore = toko || displayItems[0]?.toko || 'HTG';
 
   const handleExport = async () => {
+    setPdfResult(null);
+    setIsExportingDocx(true);
+    setExportStatusMsg('Membuka tab PDF...');
+
+    // Step 1: Open blank tab IMMEDIATELY on user click event (user gesture required by mobile browsers)
+    let preOpenedTab: Window | null = null;
     try {
-      setIsExportingDocx(true);
+      preOpenedTab = window.open('about:blank', '_blank');
+      if (preOpenedTab) {
+        preOpenedTab.document.write(`
+          <!DOCTYPE html>
+          <html lang="id">
+            <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Memproses PDF Invoice...</title>
+              <style>
+                body {
+                  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  display: flex; flex-direction: column; align-items: center; justify-content: center;
+                  min-height: 100vh; margin: 0; background-color: #0f172a; color: #f8fafc;
+                  padding: 24px; text-align: center; box-sizing: border-box;
+                }
+                .card {
+                  background: #1e293b; padding: 32px 24px; border-radius: 20px;
+                  border: 1px solid #334155; max-width: 420px; width: 100%;
+                  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                }
+                .spinner {
+                  width: 44px; height: 44px; border: 4px solid #fbbf24;
+                  border-top-color: transparent; border-radius: 50%;
+                  animation: spin 0.8s linear infinite; margin: 0 auto 20px auto;
+                }
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                h2 { font-size: 18px; font-weight: 800; color: #fbbf24; margin: 0 0 10px 0; }
+                p { font-size: 13px; color: #94a3b8; margin: 0; line-height: 1.5; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="spinner"></div>
+                <h2>Sedang Memproses PDF Invoice...</h2>
+                <p>Mohon tunggu sebentar, file PDF sedang disiapkan. Halaman ini akan otomatis menampilkan file PDF setelah selesai.</p>
+              </div>
+            </body>
+          </html>
+        `);
+      }
+    } catch (tabErr) {
+      console.warn('[Mobile Export] Pre-opening tab failed or blocked:', tabErr);
+    }
+
+    try {
       if (onSaveInvoiceRecord) {
         onSaveInvoiceRecord();
       }
-      await exportInvoicePdf({
-        storeName: mainStore,
-        kitchenName: mainKitchen,
-        items: displayItems,
-        invoiceNumber,
-        bayar,
-        customNama: recipientName || mainKitchen,
-        customAlamat: recipientAddress || 'Banyuwangi',
-        customNomor: recipientPhone || invoiceNumber,
-      });
+
+      const res = await exportInvoicePdf(
+        {
+          storeName: mainStore,
+          kitchenName: mainKitchen,
+          items: displayItems,
+          invoiceNumber,
+          bayar,
+          customNama: recipientName || mainKitchen,
+          customAlamat: recipientAddress || 'Banyuwangi',
+          customNomor: recipientPhone || invoiceNumber,
+        },
+        (statusText) => {
+          setExportStatusMsg(statusText);
+        }
+      );
+
+      if (res && res.pdfUrl) {
+        setPdfResult({ url: res.pdfUrl, fileName: res.fileName });
+
+        // Step 3: Redirect the pre-opened tab to the generated Blob URL
+        if (preOpenedTab && !preOpenedTab.closed) {
+          preOpenedTab.location.href = res.pdfUrl;
+        }
+      }
     } catch (err: any) {
       console.error('Export Invoice Error:', err);
+      if (preOpenedTab && !preOpenedTab.closed) {
+        try {
+          preOpenedTab.document.body.innerHTML = `
+            <div style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; color: #f8fafc; padding: 20px; text-align: center;">
+              <div style="background: #1e293b; border: 1px solid #ef4444; padding: 24px; border-radius: 16px; max-width: 400px;">
+                <h2 style="color: #f87171; margin-top: 0;">Gagal Mengonversi PDF</h2>
+                <p style="color: #cbd5e1; font-size: 14px;">${err?.message || err}</p>
+                <button onclick="window.close()" style="background: #ef4444; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 12px;">Tutup Halaman</button>
+              </div>
+            </div>
+          `;
+        } catch (_) {
+          preOpenedTab.close();
+        }
+      }
       alert(`Gagal Export Invoice PDF:\n${err?.message || err}`);
     } finally {
       setIsExportingDocx(false);
+      setExportStatusMsg('');
     }
   };
 
@@ -122,16 +207,21 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               <button
                 onClick={handleExport}
                 disabled={isExportingDocx}
-                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-slate-900 font-black text-xs sm:text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer border border-amber-500/80"
-                title="Export Invoice ke PDF (Menggunakan Template Google Docs Docxtemplater)"
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 disabled:opacity-75 disabled:cursor-not-allowed text-slate-900 font-black text-xs sm:text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer border border-amber-500/80"
+                title="Export Invoice ke PDF"
               >
-                <Printer className="w-4 h-4 stroke-[2.5]" />
-                <span>{isExportingDocx ? 'Mengolah Template...' : 'Export / Cetak PDF'}</span>
+                {isExportingDocx ? (
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0 text-slate-900" />
+                ) : (
+                  <Printer className="w-4 h-4 stroke-[2.5] shrink-0" />
+                )}
+                <span>{isExportingDocx ? (exportStatusMsg || 'Mengolah PDF...') : 'Export / Cetak PDF'}</span>
               </button>
 
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer"
+                disabled={isExportingDocx}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer disabled:opacity-50"
                 title="Tutup Modal"
               >
                 <X className="w-5 h-5" />
@@ -141,6 +231,45 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
 
           {/* Pratinjau Content Body */}
           <div className="p-6 sm:p-8 overflow-y-auto flex-1 bg-slate-50 text-slate-900 font-sans space-y-6">
+            {/* Active Export Status Banner */}
+            {isExportingDocx && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-3 text-amber-900 text-xs sm:text-sm font-bold">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-extrabold text-amber-950">{exportStatusMsg || 'Sedang memproses PDF...'}</p>
+                  <p className="text-[11px] font-normal text-amber-800 mt-0.5">
+                    Proses konversi dapat memakan waktu beberapa detik di koneksi mobile. Mohon tidak menutup halaman ini.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Success Fallback Download Banner */}
+            {pdfResult && !isExportingDocx && (
+              <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-emerald-950 font-sans shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-xs sm:text-sm text-emerald-950">PDF Invoice Berhasil Dibuat!</p>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      Jika file PDF belum otomatis terbuka di tab browser Anda, silakan klik tombol di samping.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={pdfResult.url}
+                  download={pdfResult.fileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 shrink-0 border border-emerald-700/50"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  <span>Klik di sini untuk download PDF</span>
+                </a>
+              </div>
+            )}
             {/* Store & Recipient Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Card 1: Data Toko & Invoice */}

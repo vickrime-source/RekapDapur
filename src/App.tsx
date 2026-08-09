@@ -29,6 +29,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { Toast, ToastMessage, ToastType } from './components/Toast';
 import { SplashScreen } from './components/SplashScreen';
 import { generateInvoiceNumber } from './lib/formatters';
+import { addRow, fetchSheetData, mapRawOrder, mapRawInvoice } from './lib/googleSheets';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -41,6 +42,41 @@ export default function App() {
   const [stores, setStores] = useLocalStorage<StoreType[]>('dapur_tracker_stores_v4', INITIAL_STORES);
   const [pemasokList, setPemasokList] = useLocalStorage<string[]>('dapur_tracker_pemasok_v4', INITIAL_PEMASOK);
   const [invoices, setInvoices] = useLocalStorage<InvoiceRecord[]>('dapur_tracker_invoices_v4', []);
+
+  // Google Sheets Sync State
+  const [isSyncingGas, setIsSyncingGas] = useState(false);
+  const [gasError, setGasError] = useState<string | null>(null);
+
+  // Fetch sheet data on mount
+  const loadSpreadsheetData = async (showToastNotice = false) => {
+    setIsSyncingGas(true);
+    setGasError(null);
+    try {
+      const [pesananRes, transaksiRes] = await Promise.all([
+        fetchSheetData<any>('pesanan'),
+        fetchSheetData<any>('transaksi'),
+      ]);
+
+      const mappedOrders = (pesananRes.data || []).map(mapRawOrder);
+      const mappedInvoices = (transaksiRes.data || []).map(mapRawInvoice);
+
+      setOrders(mappedOrders);
+      setInvoices(mappedInvoices);
+
+      if (showToastNotice) {
+        showToast('Data berhasil disinkronkan dari Google Sheets', 'success');
+      }
+    } catch (err: any) {
+      console.error('Gagal mengambil data spreadsheet:', err);
+      setGasError(err?.message || 'Gagal koneksi ke Google Sheets');
+    } finally {
+      setIsSyncingGas(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadSpreadsheetData();
+  }, []);
 
 
   // Toast Notification State
@@ -168,14 +204,38 @@ export default function App() {
     );
   };
 
-  const handleDuplicateOrder = (item: OrderItem) => {
+  const handleDuplicateOrder = async (item: OrderItem) => {
     const duplicated: OrderItem = {
       ...item,
       id: `ord-dup-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       createdAt: new Date().toISOString(),
     };
-    setOrders((prev) => [duplicated, ...prev]);
-    showToast('Pesanan berhasil diduplikasi', 'success');
+
+    setIsSyncingGas(true);
+    const res = await addRow('pesanan', {
+      id: duplicated.id,
+      tanggal: duplicated.tanggal,
+      toko: duplicated.toko,
+      tujuanDapur: duplicated.tujuanDapur,
+      pemasok: duplicated.pemasok,
+      namaBarang: duplicated.namaBarang,
+      qty: duplicated.qty,
+      hargaBeli: duplicated.hargaBeli,
+      hargaJual: duplicated.hargaJual,
+      status: duplicated.status,
+      paymentStatus: duplicated.paymentStatus || 'UNPAID',
+      deliveryStatus: duplicated.deliveryStatus || 'PENDING',
+      catatan: duplicated.catatan || '',
+      createdAt: duplicated.createdAt,
+    });
+    setIsSyncingGas(false);
+
+    if (res.success) {
+      setOrders((prev) => [duplicated, ...prev]);
+      showToast('Pesanan berhasil diduplikasi & tersimpan ke Google Sheets', 'success');
+    } else {
+      alert(`Gagal menyimpan duplikasi ke Google Sheets:\n${res.error || 'Unknown error'}`);
+    }
   };
 
   const handleToggleBatchStatus = (targetName: string, date: string, targetStatus: 'pending' | 'selesai') => {
@@ -188,7 +248,7 @@ export default function App() {
     );
   };
 
-  const handleSaveOrder = (
+  const handleSaveOrder = async (
     orderData: Omit<OrderItem, 'id' | 'createdAt'> | Array<Omit<OrderItem, 'id' | 'createdAt'>>,
     editId?: string
   ) => {
@@ -197,15 +257,61 @@ export default function App() {
         prev.map((o) => (o.id === editId ? { ...o, ...orderData } : o))
       );
       showToast('Pesanan berhasil diperbarui', 'edit');
-    } else {
-      const itemsToAdd = Array.isArray(orderData) ? orderData : [orderData];
-      const newOrders: OrderItem[] = itemsToAdd.map((item, idx) => ({
+      return;
+    }
+
+    const itemsToAdd = Array.isArray(orderData) ? orderData : [orderData];
+    const createdDate = new Date().toISOString();
+
+    setIsSyncingGas(true);
+    let successCount = 0;
+    let lastError = '';
+    const newOrdersAdded: OrderItem[] = [];
+
+    for (let idx = 0; idx < itemsToAdd.length; idx++) {
+      const item = itemsToAdd[idx];
+      const newOrderItem: OrderItem = {
         ...item,
         id: `ord-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
-        createdAt: new Date().toISOString(),
-      }));
-      setOrders((prev) => [...newOrders, ...prev]);
-      showToast(`${itemsToAdd.length} pesanan berhasil ditambahkan`, 'success');
+        createdAt: createdDate,
+      };
+
+      const res = await addRow('pesanan', {
+        id: newOrderItem.id,
+        tanggal: newOrderItem.tanggal,
+        toko: newOrderItem.toko,
+        tujuanDapur: newOrderItem.tujuanDapur,
+        pemasok: newOrderItem.pemasok,
+        namaBarang: newOrderItem.namaBarang,
+        qty: newOrderItem.qty,
+        hargaBeli: newOrderItem.hargaBeli,
+        hargaJual: newOrderItem.hargaJual,
+        status: newOrderItem.status,
+        paymentStatus: newOrderItem.paymentStatus || (newOrderItem.status === 'selesai' ? 'PAID' : 'UNPAID'),
+        deliveryStatus: newOrderItem.deliveryStatus || (newOrderItem.status === 'selesai' ? 'DONE' : 'PENDING'),
+        catatan: newOrderItem.catatan || '',
+        createdAt: newOrderItem.createdAt,
+      });
+
+      if (res.success) {
+        successCount++;
+        newOrdersAdded.push(newOrderItem);
+      } else {
+        lastError = res.error || 'Gagal menyimpan ke Google Sheets';
+      }
+    }
+
+    setIsSyncingGas(false);
+
+    if (successCount > 0) {
+      setOrders((prev) => [...newOrdersAdded, ...prev]);
+      if (successCount === itemsToAdd.length) {
+        showToast(`${successCount} pesanan berhasil ditambahkan & tersimpan ke Google Sheets`, 'success');
+      } else {
+        alert(`${successCount} dari ${itemsToAdd.length} pesanan tersimpan. Sebagian gagal: ${lastError}`);
+      }
+    } else {
+      alert(`Gagal menyimpan pesanan ke Google Sheets:\n${lastError}\n\nData TIDAK tersimpan.`);
     }
   };
 
@@ -309,7 +415,7 @@ export default function App() {
     setIsInvoiceModalOpen(true);
   };
 
-  const handleSaveInvoiceRecord = () => {
+  const handleSaveInvoiceRecord = async () => {
     if (invoices.some((inv) => inv.invoiceNumber === invoiceNumber)) return;
 
     const totalBeli = invoiceItems.reduce((s, i) => s + i.qty * i.hargaBeli, 0);
@@ -331,8 +437,32 @@ export default function App() {
       totalProfit: totalJual - totalBeli,
     };
 
-    setInvoices((prev) => [newRecord, ...prev]);
-    showToast('Invoice berhasil disimpan', 'success');
+    setIsSyncingGas(true);
+    // POST payload to sheet "transaksi"
+    const txData = {
+      id: newRecord.id,
+      invoiceNumber: newRecord.invoiceNumber,
+      tanggalPrint: newRecord.tanggalPrint,
+      createdAt: newRecord.createdAt,
+      tujuanDapur: newRecord.tujuanDapur,
+      toko: newRecord.toko,
+      totalBeli: newRecord.totalBeli,
+      totalJual: newRecord.totalJual,
+      totalProfit: newRecord.totalProfit,
+      itemsCount: newRecord.items.length,
+      itemsSummary: newRecord.items.map((i) => `${i.namaBarang} (${i.qty})`).join(', '),
+      items: JSON.stringify(newRecord.items),
+    };
+
+    const res = await addRow('transaksi', txData);
+    setIsSyncingGas(false);
+
+    if (res.success) {
+      setInvoices((prev) => [newRecord, ...prev]);
+      showToast('Invoice & Transaksi tersimpan ke Google Sheets', 'success');
+    } else {
+      alert(`Gagal menyimpan transaksi ke Google Sheets:\n${res.error || 'Unknown error'}\n\nTransaksi tidak tersimpan.`);
+    }
   };
 
   const handleDeleteInvoice = (id: string) => {
@@ -356,23 +486,61 @@ export default function App() {
 
   // Handlers for WhatsApp Text Import
 
-  const handleImportParsedItems = (parsedResults: TextParseResult[], targetDate: string) => {
-    const newOrders: OrderItem[] = parsedResults.map((res, index) => ({
-      id: `ord-imp-${Date.now()}-${index}`,
-      namaBarang: res.namaBarang,
-      qty: res.qty,
-      hargaBeli: res.hargaBeli,
-      hargaJual: res.hargaJual,
-      toko: res.toko || stores[0]?.nama || 'HTG',
-      tujuanDapur: res.tujuanDapur || kitchens[0]?.nama || 'Siliragung',
-      pemasok: res.pemasok || pemasokList[0] || 'Pemasok 1',
-      status: 'pending',
-      tanggal: targetDate || selectedDate,
-      createdAt: new Date().toISOString(),
-    }));
+  const handleImportParsedItems = async (parsedResults: TextParseResult[], targetDate: string) => {
+    setIsSyncingGas(true);
+    let successCount = 0;
+    let lastError = '';
+    const newOrdersAdded: OrderItem[] = [];
 
-    setOrders((prev) => [...newOrders, ...prev]);
-    showToast(`${parsedResults.length} item berhasil diimport`, 'success');
+    for (let index = 0; index < parsedResults.length; index++) {
+      const res = parsedResults[index];
+      const newOrderItem: OrderItem = {
+        id: `ord-imp-${Date.now()}-${index}`,
+        namaBarang: res.namaBarang,
+        qty: res.qty,
+        hargaBeli: res.hargaBeli,
+        hargaJual: res.hargaJual,
+        toko: res.toko || stores[0]?.nama || 'HTG',
+        tujuanDapur: res.tujuanDapur || kitchens[0]?.nama || 'Siliragung',
+        pemasok: res.pemasok || pemasokList[0] || 'Pemasok 1',
+        status: 'pending',
+        tanggal: targetDate || selectedDate,
+        createdAt: new Date().toISOString(),
+      };
+
+      const saveRes = await addRow('pesanan', {
+        id: newOrderItem.id,
+        tanggal: newOrderItem.tanggal,
+        toko: newOrderItem.toko,
+        tujuanDapur: newOrderItem.tujuanDapur,
+        pemasok: newOrderItem.pemasok,
+        namaBarang: newOrderItem.namaBarang,
+        qty: newOrderItem.qty,
+        hargaBeli: newOrderItem.hargaBeli,
+        hargaJual: newOrderItem.hargaJual,
+        status: newOrderItem.status,
+        paymentStatus: 'UNPAID',
+        deliveryStatus: 'PENDING',
+        catatan: '',
+        createdAt: newOrderItem.createdAt,
+      });
+
+      if (saveRes.success) {
+        successCount++;
+        newOrdersAdded.push(newOrderItem);
+      } else {
+        lastError = saveRes.error || 'Gagal menyimpan ke Google Sheets';
+      }
+    }
+
+    setIsSyncingGas(false);
+
+    if (successCount > 0) {
+      setOrders((prev) => [...newOrdersAdded, ...prev]);
+      showToast(`${successCount} item import berhasil tersimpan ke Google Sheets`, 'success');
+    } else {
+      alert(`Gagal mengimpor item ke Google Sheets:\n${lastError}`);
+    }
   };
 
   // Horizontal Swipe Gesture threshold logic
@@ -396,6 +564,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenTextImport={() => setIsTextImportOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
+        onRefreshGas={() => loadSpreadsheetData(true)}
+        isSyncingGas={isSyncingGas}
       />
 
       {/* Main Content Area */}

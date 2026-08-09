@@ -3,7 +3,7 @@ import { convertDocxToPdfWithCloudConvert } from '../src/lib/cloudConvert';
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '25mb',
+      sizeLimit: '50mb',
     },
   },
 };
@@ -14,10 +14,26 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { docxBase64, apiKey: customApiKey } = req.body || {};
+    let docxBuffer: Buffer | null = null;
+    let downloadName = 'Invoice.pdf';
+    let customApiKey = '';
 
-    if (!docxBase64) {
-      return res.status(400).json({ error: 'Parameter docxBase64 wajib diisi.' });
+    if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+      docxBuffer = req.body;
+      if (req.query.fileName) {
+        downloadName = decodeURIComponent(req.query.fileName as string);
+      }
+    } else {
+      const { docxBase64, apiKey, fileName } = req.body || {};
+      if (docxBase64) {
+        docxBuffer = Buffer.from(docxBase64, 'base64');
+      }
+      if (fileName) downloadName = fileName;
+      if (apiKey) customApiKey = apiKey;
+    }
+
+    if (!docxBuffer || docxBuffer.length === 0) {
+      return res.status(400).json({ error: 'Data file DOCX tidak ditemukan dalam request.' });
     }
 
     const apiKey = (process.env.CLOUDCONVERT_API_KEY || customApiKey || '').trim();
@@ -28,11 +44,10 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const docxBuffer = Buffer.from(docxBase64, 'base64');
     const pdfBuffer = await convertDocxToPdfWithCloudConvert(docxBuffer, apiKey);
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="invoice.pdf"');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
     return res.status(200).send(pdfBuffer);
   } catch (err: any) {
     console.error('[API Error /api/convert-to-pdf Exception Details]:', err);

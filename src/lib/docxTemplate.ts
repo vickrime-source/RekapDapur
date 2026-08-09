@@ -270,10 +270,14 @@ export async function fetchDocxTemplateBuffer(storeName: string): Promise<ArrayB
  * 3. Save filled docx file
  * 4. Convert filled docx directly to PDF via docx-preview & html2pdf (NO hardcoded HTML templates)
  */
-export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<void> {
+export async function exportInvoicePdf(
+  options: ExportInvoiceOptions,
+  onProgress?: (statusMsg: string) => void
+): Promise<{ pdfBlob: Blob; pdfUrl: string; fileName: string }> {
   const { storeName, kitchenName } = options;
 
   // 1. Prepare scoped data
+  onProgress?.('Menyiapkan data invoice...');
   const {
     validItems,
     dataContext,
@@ -286,9 +290,11 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
   }
 
   // 2. Fetch Google Docs docx template via proxy
+  onProgress?.('Mengambil template invoice...');
   const arrayBuffer = await fetchDocxTemplateBuffer(storeName);
 
   // 3. Process docx with Docxtemplater
+  onProgress?.('Mengisi template invoice...');
   const zip = new PizZip(arrayBuffer);
   let docxBlob: Blob;
 
@@ -328,42 +334,95 @@ export async function exportInvoicePdf(options: ExportInvoiceOptions): Promise<v
   const baseFileName = `Invoice_${storeName.replace(/\s+/g, '_')}_${kitchenName.replace(/\s+/g, '_')}_${rawDate}`;
 
   // 4. Convert filled DOCX file to PDF via backend CloudConvert proxy endpoint (/api/convert-to-pdf)
-  try {
-    const arrayBufferDocx = await docxBlob.arrayBuffer();
-    const bytes = new Uint8Array(arrayBufferDocx);
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+  const arrayBufferDocx = await docxBlob.arrayBuffer();
+
+  let convertResponse: Response | null = null;
+  let attempt = 0;
+  const maxAttempts = 2; // 1 original + 1 retry
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    try {
+      if (attempt > 1) {
+        onProgress?.('Koneksi terputus/lambat. Mencoba ulang pengiriman... (Percobaan 2)');
+        await new Promise((r) => setTimeout(r, 2000));
+      } else {
+        onProgress?.('Mengonversi ke PDF via CloudConvert...');
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for mobile networks
+
+      convertResponse = await fetch(`/api/convert-to-pdf?fileName=${encodeURIComponent(`${baseFileName}.pdf`)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+        body: arrayBufferDocx,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!convertResponse.ok) {
+        let errorMsg = `HTTP ${convertResponse.status}: Gagal konversi PDF.`;
+        try {
+          const errJson = await convertResponse.json();
+          if (errJson.error) errorMsg = errJson.error;
+        } catch (_) {
+          const errText = await convertResponse.text().catch(() => '');
+          if (errText) errorMsg = `HTTP ${convertResponse.status}: ${errText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      break; // Success
+    } catch (pdfErr: any) {
+      const isNetworkOrTimeout =
+        pdfErr.name === 'AbortError' ||
+        pdfErr.message?.includes('fetch') ||
+        pdfErr.message?.includes('Failed to fetch') ||
+        pdfErr.message?.includes('NetworkError') ||
+        pdfErr.message?.includes('502') ||
+        pdfErr.message?.includes('503') ||
+        pdfErr.message?.includes('504');
+
+      if (isNetworkOrTimeout && attempt < maxAttempts) {
+        console.warn(`[Client PDF Export] Attempt ${attempt} failed network/timeout:`, pdfErr.message);
+        continue;
+      }
+
+      if (isNetworkOrTimeout) {
+        throw new Error('Koneksi internet lambat atau terputus. Silakan periksa jaringan Anda dan coba lagi.');
+      }
+
+      console.error('Konversi PDF via CloudConvert API gagal:', pdfErr);
+      throw new Error(pdfErr?.message || pdfErr);
     }
-    const docxBase64 = btoa(binary);
-
-    const convertResponse = await fetch('/api/convert-to-pdf', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        docxBase64,
-        fileName: `${baseFileName}.pdf`,
-      }),
-    });
-
-    if (!convertResponse.ok) {
-      let errorMsg = 'Gagal konversi PDF, coba lagi.';
-      try {
-        const errJson = await convertResponse.json();
-        if (errJson.error) errorMsg = errJson.error;
-      } catch (_) {}
-      throw new Error(errorMsg);
-    }
-
-    const pdfBlob = await convertResponse.blob();
-    saveAs(pdfBlob, `${baseFileName}.pdf`);
-  } catch (pdfErr: any) {
-    console.error('Konversi PDF via CloudConvert API gagal:', pdfErr);
-    throw new Error(`Gagal mengonversi & mengunduh PDF via CloudConvert:\n${pdfErr?.message || pdfErr}`);
   }
+
+  if (!convertResponse || !convertResponse.ok) {
+    throw new Error('Gagal mengonversi PDF, tidak ada respons valid dari server.');
+  }
+
+  onProgress?.('Mengunduh file PDF...');
+  const pdfBlob = await convertResponse.blob();
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const fileName = `${baseFileName}.pdf`;
+
+  // Fallback direct save
+  try {
+    saveAs(pdfBlob, fileName);
+  } catch (e) {
+    console.warn('saveAs failed or blocked:', e);
+  }
+
+  onProgress?.('Selesai!');
+
+  return {
+    pdfBlob,
+    pdfUrl,
+    fileName,
+  };
 }
 
 /**
