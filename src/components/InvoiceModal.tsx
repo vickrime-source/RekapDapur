@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Printer, Receipt, FileText } from 'lucide-react';
 import { OrderItem } from '../types';
 import { formatRupiah, formatTanggalRealtime, parseIndonesianNumber } from '../lib/formatters';
@@ -15,6 +15,7 @@ interface InvoiceModalProps {
   recipientName?: string;
   recipientAddress?: string;
   recipientPhone?: string;
+  bayarAmount?: number;
   onSaveInvoiceRecord?: () => void;
 }
 
@@ -28,10 +29,17 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   recipientName,
   recipientAddress,
   recipientPhone,
+  bayarAmount = 0,
   onSaveInvoiceRecord,
 }) => {
-  const [bayar, setBayar] = useState<number>(0);
+  const [bayar, setBayar] = useState<number>(bayarAmount);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setBayar(bayarAmount);
+    }
+  }, [isOpen, bayarAmount]);
 
   if (!isOpen || items.length === 0) return null;
 

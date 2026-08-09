@@ -6,6 +6,7 @@ import {
   Edit2,
   Store as StoreIcon,
   MoreVertical,
+  Printer,
   X
 } from 'lucide-react';
 import { InvoiceRecord, OrderItem, Kitchen, PaymentStatus } from '../types';
@@ -35,6 +36,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onUpdatePaymentStatus,
   onEditOrder,
   onDeleteOrder,
+  onOpenInvoiceModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPemasok, setSelectedPemasok] = useState('all');
@@ -273,59 +275,84 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           </button>
                         </td>
 
-                        {/* AKSI THREE DOTS MENU */}
+                        {/* AKSI THREE DOTS MENU & PRINT ICON */}
                         <td className="py-2 px-2 text-center relative">
-                          <div className="relative inline-block" ref={isMenuOpen ? menuRef : null}>
+                          <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
-                              onClick={() => setActiveMenuId(isMenuOpen ? null : item.id)}
-                              className={`p-1 rounded-lg transition-colors ${
-                                isMenuOpen
-                                  ? 'bg-slate-200 text-slate-900'
-                                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-                              }`}
-                              title="Menu Aksi"
+                              onClick={() => onOpenInvoiceModal([item], item.tujuanDapur, item.toko)}
+                              className="p-1 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer"
+                              title="Cetak / Export Invoice PDF (🖨)"
                             >
-                              <MoreVertical className="w-4 h-4" />
+                              <Printer className="w-4 h-4" />
                             </button>
 
-                            <AnimatePresence>
-                              {isMenuOpen && (
-                                <motion.div
-                                  initial={{ opacity: 0, scale: 0.95, y: -5 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -5 }}
-                                  transition={{ duration: 0.1 }}
-                                  className="absolute right-0 top-full mt-1 w-28 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 text-left"
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveMenuId(null);
-                                      onEditOrder(item);
-                                    }}
-                                    className="w-full px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Edit</span>
-                                  </button>
+                            <div className="relative inline-block" ref={isMenuOpen ? menuRef : null}>
+                              <button
+                                type="button"
+                                onClick={() => setActiveMenuId(isMenuOpen ? null : item.id)}
+                                className={`p-1 rounded-lg transition-colors ${
+                                  isMenuOpen
+                                    ? 'bg-slate-200 text-slate-900'
+                                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                                }`}
+                                title="Menu Aksi"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
 
-                                  <div className="border-t border-slate-100 my-1" />
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveMenuId(null);
-                                      onDeleteOrder(item.id);
-                                    }}
-                                    className="w-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              <AnimatePresence>
+                                {isMenuOpen && (
+                                  <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                    transition={{ duration: 0.1 }}
+                                    className="absolute right-0 top-full mt-1 w-32 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 text-left"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                                    <span>Hapus</span>
-                                  </button>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveMenuId(null);
+                                        onOpenInvoiceModal([item], item.tujuanDapur, item.toko);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Export Invoice</span>
+                                    </button>
+
+                                    <div className="border-t border-slate-100 my-1" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveMenuId(null);
+                                        onEditOrder(item);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>Edit</span>
+                                    </button>
+
+                                    <div className="border-t border-slate-100 my-1" />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActiveMenuId(null);
+                                        onDeleteOrder(item.id);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                      <span>Hapus</span>
+                                    </button>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
                           </div>
                         </td>
                       </tr>

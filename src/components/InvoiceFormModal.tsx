@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, ArrowRight, User, MapPin, Phone } from 'lucide-react';
+import { X, FileText, ArrowRight, User, MapPin, Phone, CreditCard, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { OrderItem, Kitchen } from '../types';
+import { parseIndonesianNumber, formatRupiah } from '../lib/formatters';
 
 interface InvoiceFormModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface InvoiceFormModalProps {
     recipientName: string;
     address: string;
     phone: string;
+    bayar: number;
   }) => void;
 }
 
@@ -32,17 +34,30 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const [recipientName, setRecipientName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [bayarInput, setBayarInput] = useState<string>('0');
   const [error, setError] = useState('');
+
+  // Calculate total amount for filtered scoped items
+  const totalAmount = items.reduce((sum, item) => {
+    const q = parseIndonesianNumber(item.qty);
+    const p = parseIndonesianNumber(item.hargaJual || item.hargaBeli || 0);
+    return sum + q * p;
+  }, 0);
+
+  const parsedBayar = parseIndonesianNumber(bayarInput);
+  const calculatedSisa = Math.max(0, totalAmount - parsedBayar);
 
   useEffect(() => {
     if (isOpen) {
       setError('');
+      setBayarInput('0');
+
       const normKitchen = (kitchenName || items[0]?.tujuanDapur || '').trim().toLowerCase();
       const matchedKitchen = kitchens.find(
         (k) => k.nama.trim().toLowerCase() === normKitchen
       );
 
-      // Default prefill values
+      // Default prefill values from matched kitchen
       const defaultName = matchedKitchen?.penanggungJawab || matchedKitchen?.nama || kitchenName || items[0]?.tujuanDapur || '';
       const defaultAddress = matchedKitchen?.lokasi || 'Banyuwangi';
       const defaultPhone = '082229992371';
@@ -57,8 +72,14 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!recipientName.trim()) {
       setError('Nama Penerima wajib diisi');
+      return;
+    }
+
+    if (parsedBayar > totalAmount) {
+      setError('Jumlah bayar tidak boleh melebihi total');
       return;
     }
 
@@ -72,6 +93,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       recipientName: recipientName.trim(),
       address: address.trim() || 'Banyuwangi',
       phone: phone.trim() || '-',
+      bayar: parsedBayar,
     });
   };
 
@@ -95,12 +117,13 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   Konfirmasi Data Invoice
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Lengkapi data penerima sebelum export PDF
+                  Lengkapi data penerima & pembayaran sebelum preview
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
+              type="button"
               className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -124,17 +147,12 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 }}
                 placeholder="e.g. Dapur Singojuruh / Ibu Maria"
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 transition-all ${
-                  error
+                  error && !recipientName.trim()
                     ? 'border-red-500 focus:ring-red-200 bg-red-50/50'
                     : 'border-slate-300 focus:border-indigo-600 focus:ring-indigo-100 bg-slate-50 focus:bg-white'
                 }`}
                 autoFocus
               />
-              {error && (
-                <p className="text-[11px] text-red-500 font-medium mt-1">
-                  {error}
-                </p>
-              )}
             </div>
 
             {/* Input 2: Alamat */}
@@ -165,6 +183,53 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 placeholder="e.g. 082229992371"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:border-indigo-600 focus:ring-indigo-100 bg-slate-50 focus:bg-white transition-all"
               />
+            </div>
+
+            {/* Input 4: Jumlah Bayar */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                Jumlah Bayar (Rp)
+              </label>
+              <input
+                type="text"
+                value={bayarInput}
+                onChange={(e) => {
+                  setBayarInput(e.target.value);
+                  const val = parseIndonesianNumber(e.target.value);
+                  if (val <= totalAmount) setError('');
+                }}
+                placeholder="0"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 transition-all ${
+                  error && parsedBayar > totalAmount
+                    ? 'border-red-500 focus:ring-red-200 bg-red-50/50'
+                    : 'border-slate-300 focus:border-indigo-600 focus:ring-indigo-100 bg-slate-50 focus:bg-white'
+                }`}
+              />
+            </div>
+
+            {/* Error Banner */}
+            {error && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-center gap-2 text-red-700 text-xs font-bold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Summary Box */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 text-xs font-medium">
+              <div className="flex justify-between text-slate-600">
+                <span>Total Transaksi:</span>
+                <span className="font-extrabold text-slate-900">{formatRupiah(totalAmount)}</span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span>Jumlah Bayar:</span>
+                <span className="font-extrabold">{formatRupiah(parsedBayar)}</span>
+              </div>
+              <div className="flex justify-between text-slate-900 pt-1 border-t border-slate-200 font-bold">
+                <span>Sisa Pembayaran:</span>
+                <span className="font-black text-amber-600">{formatRupiah(calculatedSisa)}</span>
+              </div>
             </div>
 
             {/* Actions */}

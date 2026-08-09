@@ -119,6 +119,7 @@ export default function App() {
   const [invoiceRecipientName, setInvoiceRecipientName] = useState('');
   const [invoiceRecipientAddress, setInvoiceRecipientAddress] = useState('');
   const [invoiceRecipientPhone, setInvoiceRecipientPhone] = useState('');
+  const [invoiceBayar, setInvoiceBayar] = useState<number>(0);
 
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [invoiceItems, setInvoiceItems] = useState<OrderItem[]>([]);
@@ -290,12 +291,14 @@ export default function App() {
     recipientName: string;
     address: string;
     phone: string;
+    bayar: number;
   }) => {
     setIsInvoiceFormOpen(false);
 
     setInvoiceRecipientName(data.recipientName);
     setInvoiceRecipientAddress(data.address);
     setInvoiceRecipientPhone(data.phone);
+    setInvoiceBayar(data.bayar);
 
     const invNum = generateInvoiceNumber(data.kitchenName);
 
@@ -521,6 +524,7 @@ export default function App() {
         recipientName={invoiceRecipientName}
         recipientAddress={invoiceRecipientAddress}
         recipientPhone={invoiceRecipientPhone}
+        bayarAmount={invoiceBayar}
         onSaveInvoiceRecord={handleSaveInvoiceRecord}
       />
 
