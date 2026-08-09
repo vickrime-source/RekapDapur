@@ -3,7 +3,7 @@ import { OrderItem, InvoiceRecord } from '../types';
 export const GAS_BASE_URL =
   'https://script.google.com/macros/s/AKfycbxvxj1V6LKfqFNYVh_ITbigm_LeS0Q1_f2qpHdAcuqUQqgOrNtzI0_RA4ypPJbU-Fe6sQ/exec';
 
-export const GAS_TOKEN = 'GANTI_TOKEN_RAHASIA_INI';
+export const GAS_TOKEN = (import.meta.env.VITE_GAS_TOKEN as string) || 'Gakusah';
 
 export interface AddRowResponse {
   success: boolean;
@@ -26,7 +26,11 @@ export async function addRow(
   sheet: 'pesanan' | 'transaksi',
   data: Record<string, any>
 ): Promise<AddRowResponse> {
-  const token = localStorage.getItem('gas_secret_token') || GAS_TOKEN;
+  const rawStoredToken = localStorage.getItem('gas_secret_token');
+  const token =
+    rawStoredToken && rawStoredToken !== 'undefined' && rawStoredToken !== 'GANTI_TOKEN_RAHASIA_INI'
+      ? rawStoredToken
+      : GAS_TOKEN;
   const payload = {
     token,
     action: 'add',
