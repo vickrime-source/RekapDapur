@@ -4,20 +4,19 @@ import path from 'path';
 import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { convertDocxToPdfWithCloudConvert } from './src/lib/cloudConvert';
-import { compressDocxImages } from './src/lib/docxCompressor';
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 25 * 1024 * 1024, // 25MB limit to allow large initial uploads for auto-compression
+    fileSize: 25 * 1024 * 1024, // 25MB limit
   },
 });
 
 const TEMPLATE_URLS: Record<string, string> = {
-  "LUWENG BOGA": "https://docs.google.com/document/d/1GoLCYZnsf27NMaNYAiDbkgbVavGS4eGu/export?format=docx",
-  "HTG": "https://docs.google.com/document/d/1TRhM_wW6z5FqGLXYAuXf5-vv28-CBFYe/export?format=docx",
-  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1mu0MjtyESAVNhdE-myKdZ3ydF9XReN78/export?format=docx",
-  "PROHE": "https://docs.google.com/document/d/1YboT-odlgjZTCMO94MrsjiZgFh69NSJ8/export?format=docx"
+  "LUWENG BOGA": "https://docs.google.com/document/d/1X2HNMC1CW8hqjhKw_QS2U3CFknywAwX9/export?format=docx",
+  "HTG": "https://docs.google.com/document/d/16EIPBpX8aax5nqJAhiwXe2GUgdH0dNKd/export?format=docx",
+  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1WTfrlnfKBkMmn99PBOjjCwLxmG2Wvvht/export?format=docx",
+  "PROHE": "https://docs.google.com/document/d/1JIJ4NwEcZS18yGVy8kf4k27Ln1aaVDIf/export?format=docx"
 };
 
 function getGoogleDocTemplateUrl(storeName: string): string {
@@ -131,22 +130,16 @@ async function startServer() {
         return res.status(400).json({ error: 'Data file DOCX tidak ditemukan dalam request.' });
       }
 
-      const originalSizeBytes = docxBuffer.length;
-      const initialSizeMB = (originalSizeBytes / (1024 * 1024)).toFixed(2);
-      console.log(`[Server API /api/convert-to-pdf] Terima file DOCX (${originalSizeBytes} bytes / ${initialSizeMB} MB). Memulai auto-kompresi gambar...`);
-
-      // Auto-compress images inside DOCX ZIP structure
-      docxBuffer = await compressDocxImages(docxBuffer);
-
       const finalSizeBytes = docxBuffer.length;
       const finalSizeMB = (finalSizeBytes / (1024 * 1024)).toFixed(2);
+      console.log(`[Server API /api/convert-to-pdf] Terima file DOCX (${finalSizeBytes} bytes / ${finalSizeMB} MB)`);
 
       // Check payload size limit (CloudConvert/Vercel serverless platform function limit is 4.5 MB)
       const MAX_PAYLOAD_BYTES = 4.5 * 1024 * 1024;
       if (finalSizeBytes > MAX_PAYLOAD_BYTES) {
-        console.warn(`[Server API /api/convert-to-pdf] Payload size after compression (${finalSizeMB} MB) exceeds limit (4.50 MB)`);
+        console.warn(`[Server API /api/convert-to-pdf] Payload size (${finalSizeMB} MB) exceeds limit (4.50 MB)`);
         return res.status(413).json({
-          error: `Ukuran file DOCX setelah kompresi otomatis (${finalSizeMB} MB) masih melebihi batas maksimum platform (4.50 MB, ukuran awal: ${initialSizeMB} MB). Harap kurangi ukuran logo/gambar pada template Google Docs Anda.`,
+          error: `Ukuran file DOCX (${finalSizeMB} MB) melebihi batas maksimum platform (4.50 MB).`,
         });
       }
 

@@ -14,10 +14,10 @@ import {
 } from './formatters';
 
 export const TEMPLATE_URLS: Record<string, string> = {
-  "LUWENG BOGA": "https://docs.google.com/document/d/1GoLCYZnsf27NMaNYAiDbkgbVavGS4eGu/export?format=docx",
-  "HTG": "https://docs.google.com/document/d/1TRhM_wW6z5FqGLXYAuXf5-vv28-CBFYe/export?format=docx",
-  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1mu0MjtyESAVNhdE-myKdZ3ydF9XReN78/export?format=docx",
-  "PROHE": "https://docs.google.com/document/d/1YboT-odlgjZTCMO94MrsjiZgFh69NSJ8/export?format=docx"
+  "LUWENG BOGA": "https://docs.google.com/document/d/1X2HNMC1CW8hqjhKw_QS2U3CFknywAwX9/export?format=docx",
+  "HTG": "https://docs.google.com/document/d/16EIPBpX8aax5nqJAhiwXe2GUgdH0dNKd/export?format=docx",
+  "LUMBUNG ADIFRUTA": "https://docs.google.com/document/d/1WTfrlnfKBkMmn99PBOjjCwLxmG2Wvvht/export?format=docx",
+  "PROHE": "https://docs.google.com/document/d/1JIJ4NwEcZS18yGVy8kf4k27Ln1aaVDIf/export?format=docx"
 };
 
 export const INVOICE_TEMPLATES = TEMPLATE_URLS;
