@@ -1,6 +1,7 @@
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
+import { compressDocxImagesClient } from './clientDocxCompressor';
 import html2pdf from 'html2pdf.js';
 import { renderAsync } from 'docx-preview';
 import { OrderItem } from '../types';
@@ -333,17 +334,24 @@ export async function exportInvoicePdf(
 
   const baseFileName = `Invoice_${storeName.replace(/\s+/g, '_')}_${kitchenName.replace(/\s+/g, '_')}_${rawDate}`;
 
-  // 4. Convert filled DOCX file to PDF via backend CloudConvert proxy endpoint (/api/convert-to-pdf)
-  const arrayBufferDocx = await docxBlob.arrayBuffer();
-  const docxSizeBytes = arrayBufferDocx.byteLength;
-  const docxSizeMB = (docxSizeBytes / (1024 * 1024)).toFixed(2);
+  // 4. Auto-compress template images in browser before uploading to Vercel/CloudConvert endpoint
+  let finalDocxBlob: Blob = docxBlob;
+  try {
+    finalDocxBlob = await compressDocxImagesClient(docxBlob, onProgress);
+  } catch (compressErr) {
+    console.warn('[Client PDF Export] Browser image compression warning:', compressErr);
+  }
 
-  console.log(`[Client PDF Export] Preparing DOCX (${docxSizeBytes} bytes / ${docxSizeMB} MB) for multipart/form-data upload`);
+  const finalArrayBufferDocx = await finalDocxBlob.arrayBuffer();
+  const finalSizeBytes = finalArrayBufferDocx.byteLength;
+  const finalSizeMB = (finalSizeBytes / (1024 * 1024)).toFixed(2);
 
-  // Pre-flight client check: Allow up to 20MB upload so server auto-compressor can shrink template images
-  if (docxSizeBytes > 20 * 1024 * 1024) {
+  console.log(`[Client PDF Export] Final DOCX size for upload: ${finalSizeBytes} bytes (${finalSizeMB} MB)`);
+
+  // Hard check against Vercel payload limit (4.5 MB)
+  if (finalSizeBytes > 4.2 * 1024 * 1024) {
     throw new Error(
-      `Ukuran file template DOCX (${docxSizeMB} MB) terlalu besar untuk diunggah (batas maksimal 20.00 MB).`
+      `Ukuran file template DOCX setelah kompresi (${finalSizeMB} MB) masih di atas limit Vercel (4.20 MB). Harap kecilkan logo pada template Google Docs.`
     );
   }
 
@@ -362,7 +370,7 @@ export async function exportInvoicePdf(
       }
 
       const formData = new FormData();
-      const docxFile = new File([arrayBufferDocx], `${baseFileName}.docx`, {
+      const docxFile = new File([finalArrayBufferDocx], `${baseFileName}.docx`, {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
       formData.append('file', docxFile);
